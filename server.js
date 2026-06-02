@@ -203,15 +203,24 @@ app.post("/api/payment/init", (req, res) => {
       ? 90
       : 45;
 
-  res.json({
-    success: true,
-    session_id: sessionId,
-    unique_payment_address: address,
-    payment_method,
-    pack,
-    expires_in_minutes: expiresInMinutes,
-     created_at: Date.now()
-  });
+  sessions[sessionId] = {
+  address,
+  payment_method,
+  pack,
+  expires_at:
+    Date.now() +
+    expiresInMinutes * 60 * 1000
+};
+
+res.json({
+  success: true,
+  session_id: sessionId,
+  unique_payment_address: address,
+  payment_method,
+  pack,
+  expires_in_minutes: expiresInMinutes,
+  created_at: Date.now()
+});
 
 });
 
