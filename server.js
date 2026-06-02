@@ -173,7 +173,7 @@ app.get("/", (req, res) => {
 
 app.post("/api/payment/init", (req, res) => {
 
-  const { pack, wallet, payment_method } = req.body;
+  const { pack, wallet, payment_method, session_id } = req.body;
 
   if (!pack || !wallet || !payment_method) {
     return res.status(400).json({
@@ -196,7 +196,29 @@ app.post("/api/payment/init", (req, res) => {
 
   counters[payment_method]++;
 
-  const sessionId = uuidv4();
+  let sessionId = session_id;
+
+if (
+    sessionId &&
+    sessions[sessionId] &&
+    sessions[sessionId].expires_at > Date.now()
+) {
+
+    return res.json({
+        success: true,
+        session_id: sessionId,
+        unique_payment_address:
+            sessions[sessionId].address,
+        payment_method,
+        pack,
+        expires_in_minutes:
+            payment_method === "CARD" ? 90 : 45,
+        created_at: Date.now()
+    });
+
+}
+
+sessionId = uuidv4();
 
   const expiresInMinutes =
     payment_method === "CARD"
