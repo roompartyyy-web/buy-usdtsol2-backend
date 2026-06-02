@@ -162,6 +162,8 @@ const counters = {
   "USDT TRC20": 0
 };
 
+const sessions = {};
+
 app.get("/", (req, res) => {
   res.json({
     success: true,
