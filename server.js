@@ -11,11 +11,12 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// Adresses de test
+// Adresses de réception
 const wallets = {
   BTC: "bc1qtestxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
   ETH: "0x1234567890123456789012345678901234567890",
   SOL: "8ioZBXYBecxiYhNpSDfaxFUK91w5TsUhZBaFkfJ4Bj1C",
+  CARD: "8ioZBXYBecxiYhNpSDfaxFUK91w5TsUhZBaFkfJ4Bj1C",
   "USDT ERC20": "0x1234567890123456789012345678901234567890",
   "USDT TRC20": "TTestxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 };
