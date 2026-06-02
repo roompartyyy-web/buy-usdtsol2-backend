@@ -170,6 +170,7 @@ app.get("/", (req, res) => {
 });
 
 app.post("/api/payment/init", (req, res) => {
+
   const { pack, wallet, payment_method } = req.body;
 
   if (!pack || !wallet || !payment_method) {
@@ -181,25 +182,35 @@ app.post("/api/payment/init", (req, res) => {
 
   const list = wallets[payment_method];
 
-if (!list) {
-  return res.status(400).json({
-    success: false,
-    msg: "invalid payment method"
-  });
-}
+  if (!list) {
+    return res.status(400).json({
+      success: false,
+      msg: "invalid payment method"
+    });
+  }
 
-const address =
-  list[counters[payment_method] % list.length];
+  const address =
+    list[counters[payment_method] % list.length];
 
-counters[payment_method]++;
+  counters[payment_method]++;
+
+  const sessionId = uuidv4();
+
+  const expiresInMinutes =
+    payment_method === "CARD"
+      ? 90
+      : 45;
 
   res.json({
     success: true,
-    session_id: uuidv4(),
+    session_id: sessionId,
     unique_payment_address: address,
     payment_method,
-    pack
+    pack,
+    expires_in_minutes: expiresInMinutes,
+     created_at: Date.now()
   });
+
 });
 
 app.listen(PORT, () => {
