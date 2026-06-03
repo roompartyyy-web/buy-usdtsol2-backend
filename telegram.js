@@ -27,4 +27,4 @@ async function notifyAdmin(parrainName, code, amount, method, clientWallet) {
     await sendTelegramMessage(ADMIN_ID, msg);
 }
 
-module.exports = { notifyParrain, notifyAdmin };
+module.exports = { notifyParrain, notifyAdmin, sendTelegramMessage };
