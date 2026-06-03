@@ -2,11 +2,10 @@ const axios = require("axios");
 const { Connection, PublicKey, LAMPORTS_PER_SOL, Keypair, Transaction } = require("@solana/web3.js");
 const { getOrCreateAssociatedTokenAccount, createTransferInstruction } = require("@solana/spl-token");
 const bs58 = require("bs58");
-const { notifyParrain, sendTelegramMessage } = require("./telegram");
+const { notifyParrain, notifyAdmin, sendTelegramMessage } = require("./telegram");
 
 // CONFIGURATION
 const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
-// TON FAKE TOKEN SOLANA
 const USDT_MINT = new PublicKey("DrnoyNZVRzYZwRbDPmN9hhJzGgD3AXtyZYPqdBzrstFQ");
 
 // ═══════════════════════════════════════════════════════════
@@ -15,57 +14,35 @@ const USDT_MINT = new PublicKey("DrnoyNZVRzYZwRbDPmN9hhJzGgD3AXtyZYPqdBzrstFQ");
 async function sendUSDT(toAddress, amountUSDT) {
     try {
         const connection = new Connection(SOLANA_RPC, "confirmed");
-        
         const privateKeyBase58 = process.env.SOLFLARE_PRIVATE_KEY;
+        
         if (!privateKeyBase58) {
-            console.error("❌ SOLFLARE_PRIVATE_KEY non définie sur Render");
+            console.error("❌ SOLFLARE_PRIVATE_KEY manquante sur Render");
             return { success: false, error: "Clé privée manquante" };
         }
         
-        const privateKey = bs58.decode(privateKeyBase58);
-        const fromWallet = Keypair.fromSecretKey(privateKey);
-        
-        console.log(`💰 Préparation envoi de ${amountUSDT} USDT à ${toAddress}...`);
-        
+        const fromWallet = Keypair.fromSecretKey(bs58.decode(privateKeyBase58));
         const toPubkey = new PublicKey(toAddress);
         
-        const fromTokenAccount = await getOrCreateAssociatedTokenAccount(
-            connection,
-            fromWallet,
-            USDT_MINT,
-            fromWallet.publicKey
-        );
-        
-        const amount = Math.floor(amountUSDT * 1_000_000); // 6 décimales
-        
-        const tokenBalance = await connection.getTokenAccountBalance(fromTokenAccount.address);
+        const fromTokenAcc = await getOrCreateAssociatedTokenAccount(connection, fromWallet, USDT_MINT, fromWallet.publicKey);
+        const amount = Math.floor(amountUSDT * 1_000_000); 
+
+        const tokenBalance = await connection.getTokenAccountBalance(fromTokenAcc.address);
         if (tokenBalance.value.uiAmount < amountUSDT) {
-            console.error(`❌ Solde insuffisant : ${tokenBalance.value.uiAmount} USDT dispos`);
-            return { success: false, error: `Solde insuffisant (${tokenBalance.value.uiAmount} USDT)` };
+            return { success: false, error: `Solde insuffisant: ${tokenBalance.value.uiAmount}` };
         }
         
-        const toTokenAccount = await getOrCreateAssociatedTokenAccount(
-            connection,
-            fromWallet,
-            USDT_MINT,
-            toPubkey
-        );
+        const toTokenAcc = await getOrCreateAssociatedTokenAccount(connection, fromWallet, USDT_MINT, toPubkey);
         
         const tx = new Transaction().add(
-            createTransferInstruction(
-                fromTokenAccount.address,
-                toTokenAccount.address,
-                fromWallet.publicKey,
-                amount
-            )
+            createTransferInstruction(fromTokenAcc.address, toTokenAcc.address, fromWallet.publicKey, amount)
         );
         
-        const signature = await connection.sendTransaction(tx, [fromWallet]);
-        await connection.confirmTransaction(signature, "confirmed");
+        const sig = await connection.sendTransaction(tx, [fromWallet]);
+        await connection.confirmTransaction(sig, "confirmed");
         
-        console.log(`✅ ${amountUSDT} USDT envoyés. Signature: ${signature}`);
-        return { success: true, signature: signature };
-        
+        console.log(`✅ ${amountUSDT} USDT envoyés. Signature: ${sig}`);
+        return { success: true, signature: sig };
     } catch (e) {
         console.error("❌ Erreur envoi Solana:", e.message);
         return { success: false, error: e.message };
@@ -73,46 +50,37 @@ async function sendUSDT(toAddress, amountUSDT) {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  VÉRIFICATION PAIEMENTS
+//  FONCTION DE DÉTECTION ROBUSTE
 // ═══════════════════════════════════════════════════════════
 
-async function checkSolanaPayment(address, expectedAmountUSD) {
+async function checkSolanaPayment(address, expectedUSD) {
     try {
         const connection = new Connection(SOLANA_RPC, "confirmed");
-        const pubkey = new PublicKey(address);
-        const signatures = await connection.getSignaturesForAddress(pubkey, { limit: 5 }, "confirmed");
+        const signatures = await connection.getSignaturesForAddress(new PublicKey(address), { limit: 5 });
         if (signatures.length === 0) return { received: false };
-        
-        const lastTx = signatures[0];
-        const txDetails = await connection.getTransaction(lastTx.signature, { commitment: "confirmed" });
-        
-        if (txDetails?.meta) {
-            const receivedSOL = (txDetails.meta.postBalances[1] - txDetails.meta.preBalances[1]) / LAMPORTS_PER_SOL;
-            if (receivedSOL > 0) {
-                const priceRes = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd");
-                const usdValue = receivedSOL * priceRes.data.solana.usd;
-                if (usdValue >= expectedAmountUSD * 0.95) return { received: true, txSignature: lastTx.signature };
-            }
+
+        const tx = await connection.getTransaction(signatures[0].signature, { commitment: "confirmed" });
+        if (tx?.meta) {
+            const receivedSOL = (tx.meta.postBalances[1] - tx.meta.preBalances[1]) / LAMPORTS_PER_SOL;
+            const priceRes = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd");
+            const usdValue = receivedSOL * priceRes.data.solana.usd;
+            if (usdValue >= expectedUSD * 0.95) return { received: true, txSignature: signatures[0].signature };
         }
-        return { received: false };
-    } catch (e) { return { received: false }; }
+    } catch (e) {} return { received: false };
 }
 
-async function checkBTCPayment(address, expectedAmountUSD) {
+async function checkBTCPayment(address, expectedUSD) {
     try {
         const res = await axios.get(`https://blockchain.info/rawaddr/${address}?limit=5`);
-        const priceRes = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd");
-        const btcPrice = priceRes.data.bitcoin.usd;
+        const price = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd");
         for (const tx of res.data.txs) {
             for (const out of tx.out) {
                 if (out.addr === address) {
-                    const usdReceived = (out.value / 1e8) * btcPrice;
-                    if (usdReceived >= expectedAmountUSD * 0.95) return { received: true, txSignature: tx.hash };
+                    if ((out.value / 1e8) * price.data.bitcoin.usd >= expectedUSD * 0.95) return { received: true, txSignature: tx.hash };
                 }
             }
         }
-        return { received: false };
-    } catch (e) { return { received: false }; }
+    } catch (e) {} return { received: false };
 }
 
 async function checkETHPayment(address, expectedAmountUSD, isUSDT = false) {
@@ -124,40 +92,36 @@ async function checkETHPayment(address, expectedAmountUSD, isUSDT = false) {
         
         const res = await axios.get(url);
         if (!res.data.result || res.data.result.length === 0) return { received: false };
-        
+
         for (const tx of res.data.result) {
-            // CORRECTION: Ajout d'une vérification si tx.to existe pour éviter l'erreur toLowerCase()
+            // FIX CRITIQUE: Forcer la comparaison en minuscules
             if (tx.to && tx.to.toLowerCase() === address.toLowerCase()) {
-                const received = isUSDT ? (Number(tx.value) / 1e6) : (Number(tx.value) / 1e18);
-                let finalUSD = received;
+                const receivedValue = isUSDT ? (Number(tx.value) / 1e6) : (Number(tx.value) / 1e18);
+                let finalUSD = receivedValue;
 
                 if (!isUSDT) {
-                    try {
-                        const priceRes = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
-                        finalUSD = received * priceRes.data.ethereum.usd;
-                    } catch (err) { finalUSD = received * 2500; }
+                    const priceRes = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
+                    finalUSD = receivedValue * priceRes.data.ethereum.usd;
                 }
 
-                if (finalUSD >= expectedAmountUSD * 0.95) {
+                if (finalUSD >= expectedAmountUSD * 0.92) { // Marge de 8% pour les frais
                     return { received: true, txSignature: tx.hash };
                 }
             }
         }
-        return { received: false };
-    } catch (e) { 
-        return { received: false }; 
-    }
+    } catch (e) {} return { received: false };
 }
 
-async function checkTRC20Payment(address, expectedAmountUSD) {
+async function checkTRC20Payment(address, expectedUSD) {
     try {
-        const res = await axios.get(`https://api.trongrid.io/v1/accounts/${address}/transactions/trc20?limit=5&contract_address=TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t`);
-        if (!res.data.data || res.data.data.length === 0) return { received: false };
-        const lastTx = res.data.data[0];
-        const received = Number(lastTx.value) / 1e6;
-        if (received >= expectedAmountUSD * 0.95) return { received: true, txSignature: lastTx.transaction_id };
-        return { received: false };
-    } catch (e) { return { received: false }; }
+        const res = await axios.get(`https://api.trongrid.io/v1/accounts/${address}/transactions/trc20?limit=5`);
+        if (!res.data.data) return { received: false };
+        for (const tx of res.data.data) {
+            if (tx.token_info.symbol === "USDT" && (Number(tx.value) / 1e6) >= expectedUSD * 0.95) {
+                return { received: true, txSignature: tx.transaction_id };
+            }
+        }
+    } catch (e) {} return { received: false };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -166,19 +130,17 @@ async function checkTRC20Payment(address, expectedAmountUSD) {
 async function checkPendingPayments(sessions) {
     for (const sessionId in sessions) {
         const session = sessions[sessionId];
-        if (!session.methods) continue;
-
         for (const method in session.methods) {
             const pay = session.methods[method];
             if (pay.paid || (pay.expires_at && pay.expires_at < Date.now())) continue;
 
-            const packInfo = (pay.pack || "0|0").split('|');
-            const usdAmount = Number(packInfo[0]);
-            const baseTokens = Number(packInfo[1]);
-            const totalToDeliver = baseTokens + Math.floor(baseTokens * (pay.discount_percent || 0) / 100);
+            const packParts = pay.pack.split('|');
+            const usdAmount = Number(packParts[0]);
+            const baseTokens = Number(packParts[1]);
+            const bonus = Math.floor(baseTokens * (pay.discount_percent || 0) / 100);
+            const totalToDeliver = baseTokens + bonus;
 
             let check = { received: false };
-
             if (method === "SOL" || method === "CARD") check = await checkSolanaPayment(pay.address, usdAmount);
             else if (method === "BTC") check = await checkBTCPayment(pay.address, usdAmount);
             else if (method === "ETH") check = await checkETHPayment(pay.address, usdAmount, false);
@@ -186,24 +148,22 @@ async function checkPendingPayments(sessions) {
             else if (method === "USDT TRC20") check = await checkTRC20Payment(pay.address, usdAmount);
 
             if (check.received) {
-                console.log(`💰 MATCH ! Paiement détecté pour ${method}.`);
+                console.log(`💰 [MATCH] Paiement détecté pour ${method} !`);
                 pay.paid = true;
                 pay.tx_signature = check.txSignature;
                 
                 const delivery = await sendUSDT(pay.wallet, totalToDeliver);
-                
                 if (delivery.success) {
                     pay.usdt_sent = true;
                     pay.usdt_tx_signature = delivery.signature;
                 }
 
-                // NOTIFICATIONS TELEGRAM
+                // NOTIF ADMIN
                 const adminId = process.env.TELEGRAM_ADMIN_ID || "8038281668";
-                const statusEmoji = delivery.success ? "✅" : "❌";
-                const adminMsg = `${statusEmoji} <b>Paiement Reçu ${method}</b>\n\n` +
-                                `Wallet: <code>${pay.wallet}</code>\n` +
+                const adminMsg = `💰 <b>PAIEMENT REÇU (${method})</b>\n\n` +
+                                `Wallet Client: <code>${pay.wallet}</code>\n` +
                                 `Montant: ${usdAmount}$\n` +
-                                `Envoi: ${totalToDeliver} USDT\n` +
+                                `Envoyé: ${totalToDeliver} USDT\n` +
                                 `TX Livraison: <code>${delivery.signature || 'N/A'}</code>`;
                 
                 await sendTelegramMessage(adminId, adminMsg);
