@@ -194,30 +194,52 @@ app.post("/api/payment/init", (req, res) => {
   let sessionId = session_id;
 
   // ═══════════════════════════════════════════════════════════
-  //  FIX #1 : Si session valide existante => retourne la MÊME
-  //           adresse, sans incrémenter le compteur
+  //  FIX CRITIQUE #1 : Si la méthode de paiement a changé,
+  //  on supprime l'ancienne session et on en crée une NOUVELLE
+  // ═══════════════════════════════════════════════════════════
+  if (
+    sessionId &&
+    sessions[sessionId] &&
+    sessions[sessionId].payment_method !== payment_method
+  ) {
+    // La méthode a changé => on supprime l'ancienne session
+    delete sessions[sessionId];
+    sessionId = null; // Force la création d'une nouvelle session
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  FIX CRITIQUE #2 : Si le wallet a changé (l'utilisateur
+  //  a saisi une nouvelle adresse), on crée aussi une nouvelle session
+  // ═══════════════════════════════════════════════════════════
+  if (
+    sessionId &&
+    sessions[sessionId] &&
+    sessions[sessionId].wallet !== wallet
+  ) {
+    delete sessions[sessionId];
+    sessionId = null;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  Si session valide existante (même méthode, même wallet,
+  //  pas expirée) => retourne la MÊME adresse
   // ═══════════════════════════════════════════════════════════
   if (
     sessionId &&
     sessions[sessionId] &&
     sessions[sessionId].expires_at > Date.now() &&
-    sessions[sessionId].payment_method === payment_method
+    sessions[sessionId].payment_method === payment_method &&
+    sessions[sessionId].wallet === wallet
   ) {
 
     return res.json({
       success: true,
       session_id: sessionId,
-      unique_payment_address:
-        sessions[sessionId].address,
+      unique_payment_address: sessions[sessionId].address,
       payment_method,
       pack,
-      expires_in_minutes:
-        payment_method === "CARD" ? 90 : 45,
+      expires_in_minutes: payment_method === "CARD" ? 90 : 45,
       created_at: sessions[sessionId].created_at,
-      // ═══════════════════════════════════════════════
-      //  On renvoie l'expires_at pour que le front
-      //  puisse recalculer le timer correctement
-      // ═══════════════════════════════════════════════
       expires_at: sessions[sessionId].expires_at
     });
   }
@@ -225,24 +247,17 @@ app.post("/api/payment/init", (req, res) => {
   // ═══════════════════════════════════════════════════════════
   //  Sinon on crée une nouvelle session (nouvelle adresse)
   // ═══════════════════════════════════════════════════════════
-  const address =
-    list[counters[payment_method] % list.length];
-
+  const address = list[counters[payment_method] % list.length];
   counters[payment_method]++;
 
   sessionId = uuidv4();
 
-  const expiresInMinutes =
-    payment_method === "CARD"
-      ? 90
-      : 45;
-
-  const expiresAt =
-    Date.now() + expiresInMinutes * 60 * 1000;
+  const expiresInMinutes = payment_method === "CARD" ? 90 : 45;
+  const expiresAt = Date.now() + expiresInMinutes * 60 * 1000;
 
   sessions[sessionId] = {
     address,
-    wallet,                       // on stocke aussi le wallet du client
+    wallet,
     payment_method,
     pack,
     expires_at: expiresAt,
@@ -257,7 +272,7 @@ app.post("/api/payment/init", (req, res) => {
     pack,
     expires_in_minutes: expiresInMinutes,
     created_at: Date.now(),
-    expires_at: expiresAt           // ← NOUVEAU
+    expires_at: expiresAt
   });
 
 });
