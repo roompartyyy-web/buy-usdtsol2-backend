@@ -5,6 +5,7 @@ const cors = require("cors");
 const { v4: uuidv4 } = require("uuid");
 const fs = require("fs");
 const { notifyParrain, notifyAdmin } = require("./telegram");
+const { checkPendingPayments } = require("./blockchain");
 
 const app = express();
 
@@ -359,6 +360,15 @@ app.post("/api/payment/init", (req, res) => {
   });
 
 });
+
+// ═══════════════════════════════════════════════════════════
+//  SURVEILLANCE BLOCKCHAIN (toutes les 30 secondes)
+// ═══════════════════════════════════════════════════════════
+setInterval(() => {
+  checkPendingPayments(sessions);
+}, 30000);
+
+console.log("🔍 Surveillance blockchain activée (toutes les 30s)");
 
 app.listen(PORT, () => {
   console.log(`Backend running on port ${PORT}`);
