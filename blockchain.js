@@ -1,10 +1,98 @@
 const axios = require("axios");
-const { Connection, PublicKey, LAMPORTS_PER_SOL } = require("@solana/web3.js");
+const { Connection, PublicKey, LAMPORTS_PER_SOL, Keypair, Transaction } = require("@solana/web3.js");
+const { getOrCreateAssociatedTokenAccount, createTransferInstruction, getMint } = require("@solana/spl-token");
+const bs58 = require("bs58");
 const { notifyParrain, notifyAdmin } = require("./telegram");
 
 require("dotenv").config();
 
 const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
+const USDT_MINT = new PublicKey("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB");
+
+// ═══════════════════════════════════════════════════════════
+//  ENVOI DES USDT AU CLIENT (via Solana)
+// ═══════════════════════════════════════════════════════════
+async function sendUSDT(toAddress, amountUSDT) {
+    try {
+        const connection = new Connection(SOLANA_RPC, "confirmed");
+        
+        // Récupère la clé privée du wallet principal
+        const privateKeyBase58 = process.env.SOLFLARE_PRIVATE_KEY;
+        if (!privateKeyBase58) {
+            console.error("❌ SOLFLARE_PRIVATE_KEY non définie dans .env");
+            return { success: false, error: "Clé privée manquante" };
+        }
+        
+        const privateKey = bs58.decode(privateKeyBase58);
+        const fromWallet = Keypair.fromSecretKey(privateKey);
+        
+        console.log(`💰 Envoi de ${amountUSDT} USDT à ${toAddress}...`);
+        
+        // Adresse du destinataire
+        const toPubkey = new PublicKey(toAddress);
+        
+        // Compte token de l'expéditeur
+        const fromTokenAccount = await getOrCreateAssociatedTokenAccount(
+            connection,
+            fromWallet,
+            USDT_MINT,
+            fromWallet.publicKey
+        );
+        
+        // Montant en lamports (USDT a 6 décimales)
+        const amount = Math.floor(amountUSDT * 1_000_000);
+        
+        // Vérifier le solde
+        const tokenBalance = await connection.getTokenAccountBalance(fromTokenAccount.address);
+        console.log(`💰 Solde disponible: ${tokenBalance.value.uiAmount} USDT`);
+        
+        if (tokenBalance.value.uiAmount < amountUSDT) {
+            console.error(`❌ Solde insuffisant: ${tokenBalance.value.uiAmount} USDT disponible, ${amountUSDT} USDT nécessaire`);
+            return { success: false, error: "Solde USDT insuffisant" };
+        }
+        
+        // Créer le compte token du destinataire si nécessaire
+        const toTokenAccount = await getOrCreateAssociatedTokenAccount(
+            connection,
+            fromWallet,
+            USDT_MINT,
+            toPubkey
+        );
+        
+        // Crée la transaction de transfert
+        const tx = new Transaction().add(
+            createTransferInstruction(
+                fromTokenAccount.address,
+                toTokenAccount.address,
+                fromWallet.publicKey,
+                amount
+            )
+        );
+        
+        // Envoyer la transaction
+        const signature = await connection.sendTransaction(tx, [fromWallet]);
+        console.log(`⏳ Transaction envoyée: ${signature}`);
+        
+        // Attendre la confirmation
+        const confirmation = await connection.confirmTransaction(signature, "confirmed");
+        
+        if (confirmation.value.err) {
+            console.error("❌ Erreur de confirmation:", confirmation.value.err);
+            return { success: false, error: "Erreur de confirmation" };
+        }
+        
+        console.log(`✅ ${amountUSDT} USDT envoyés à ${toAddress} - TX: ${signature}`);
+        
+        return {
+            success: true,
+            signature: signature
+        };
+        
+    } catch (e) {
+        console.error("❌ Erreur envoi USDT:", e.message);
+        return { success: false, error: e.message };
+    }
+}
 
 // ═══════════════════════════════════════════════════════════
 //  VÉRIFICATION PAIEMENT SOLANA (SOL et CARD)
@@ -69,13 +157,11 @@ async function checkSolanaPayment(address, expectedAmountUSD) {
 // ═══════════════════════════════════════════════════════════
 async function checkBTCPayment(address, expectedAmountUSD) {
     try {
-        // Récupère les transactions de l'adresse via Blockchain.com API
         const res = await axios.get(`https://blockchain.info/rawaddr/${address}?limit=5`);
         const data = res.data;
         
         if (!data.txs || data.txs.length === 0) return { received: false };
         
-        // Prix du BTC
         const priceRes = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd");
         const btcPrice = priceRes.data.bitcoin.usd;
         const expectedBTC = expectedAmountUSD / btcPrice;
@@ -84,11 +170,10 @@ async function checkBTCPayment(address, expectedAmountUSD) {
         const maxBTC = expectedBTC * 1.05;
         
         for (const tx of data.txs) {
-            // Vérifier que la transaction a au moins 1 confirmation
             if (tx.block_height && tx.block_height > 0) {
                 for (const out of tx.out) {
                     if (out.addr === address) {
-                        const receivedBTC = out.value / 100000000; // Satoshis → BTC
+                        const receivedBTC = out.value / 100000000;
                         
                         if (receivedBTC >= minBTC && receivedBTC <= maxBTC) {
                             return {
@@ -120,10 +205,8 @@ async function checkETHPayment(address, expectedAmountUSD, isUSDT = false) {
         let url;
         
         if (isUSDT) {
-            // Pour USDT ERC20, on vérifie les transfers du contrat USDT
             url = `https://api.etherscan.io/api?module=account&action=tokentx&contractaddress=0xdAC17F958D2ee523a2206206994597C13D831ec7&address=${address}&sort=desc&limit=5&apikey=${apiKey}`;
         } else {
-            // Pour ETH, on vérifie les transactions normales
             url = `https://api.etherscan.io/api?module=account&action=txlist&address=${address}&sort=desc&limit=5&apikey=${apiKey}`;
         }
         
@@ -140,19 +223,14 @@ async function checkETHPayment(address, expectedAmountUSD, isUSDT = false) {
         const maxETH = expectedETH * 1.05;
         
         for (const tx of data.result) {
-            // Vérifier confirmation
             if (tx.confirmations && Number(tx.confirmations) >= 1) {
                 let receivedETH;
                 
                 if (isUSDT) {
-                    // USDT a 6 décimales
                     receivedETH = Number(tx.value) / 1000000;
-                    // Vérifier que c'est bien un transfert USDT
                     if (tx.tokenSymbol !== "USDT") continue;
                 } else {
-                    // ETH a 18 décimales
                     receivedETH = Number(tx.value) / 1e18;
-                    // Vérifier que c'est vers notre adresse
                     if (tx.to !== address.toLowerCase()) continue;
                 }
                 
@@ -185,16 +263,14 @@ async function checkETHPayment(address, expectedAmountUSD, isUSDT = false) {
 // ═══════════════════════════════════════════════════════════
 async function checkTRC20Payment(address, expectedAmountUSD) {
     try {
-        // API Trongrid
         const res = await axios.get(`https://api.trongrid.io/v1/accounts/${address}/transactions/trc20?limit=5&contract_address=TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t`);
         const data = res.data;
         
         if (!data.data || data.data.length === 0) return { received: false };
         
         for (const tx of data.data) {
-            // Vérifier que c'est bien un transfert USDT
             if (tx.token_info && tx.token_info.symbol === "USDT") {
-                const receivedUSDT = Number(tx.value) / 1000000; // USDT TRC20 a 6 décimales
+                const receivedUSDT = Number(tx.value) / 1000000;
                 
                 const minUSDT = expectedAmountUSD * 0.95;
                 const maxUSDT = expectedAmountUSD * 1.05;
@@ -237,10 +313,12 @@ async function checkPendingPayments(sessions) {
             const address = payment.address;
             const pack = payment.pack || "1|2";
             const usdAmount = Number(pack.split('|')[0]);
+            const baseToken = Number(pack.split('|')[1]);
+            const bonusPercent = payment.discount_percent || 0;
+            const totalTokens = baseToken + Math.floor(baseToken * bonusPercent / 100);
             
             let result = { received: false };
             
-            // Vérifier selon la méthode
             switch(method) {
                 case "SOL":
                 case "CARD":
@@ -268,6 +346,21 @@ async function checkPendingPayments(sessions) {
                 payment.tx_signature = result.txSignature;
                 
                 // ═════════════════════════════════════════════════
+                //  ENVOYER LES USDT AU CLIENT
+                // ═════════════════════════════════════════════════
+                const sendResult = await sendUSDT(payment.wallet, totalTokens);
+                
+                if (sendResult.success) {
+                    payment.usdt_sent = true;
+                    payment.usdt_tx_signature = sendResult.signature;
+                    console.log(`✅ ${totalTokens} USDT envoyés à ${payment.wallet}`);
+                } else {
+                    payment.usdt_sent = false;
+                    payment.usdt_error = sendResult.error;
+                    console.error(`❌ Échec envoi USDT: ${sendResult.error}`);
+                }
+                
+                // ═════════════════════════════════════════════════
                 //  ENVOYER LES NOTIFICATIONS TELEGRAM
                 // ═════════════════════════════════════════════════
                 if (payment.parrain_name && payment.parrain_telegram_id) {
@@ -276,17 +369,16 @@ async function checkPendingPayments(sessions) {
                     console.log(`✅ Notifications Telegram envoyées pour le code: ${payment.referral}`);
                 }
                 
-                // ═════════════════════════════════════════════════
-                //  NOTIFICATION À L'ADMIN (même sans code promo)
-                // ═════════════════════════════════════════════════
+                // Notification à l'admin (même sans code promo)
+                const { sendTelegramMessage } = require("./telegram");
                 const ADMIN_ID = process.env.TELEGRAM_ADMIN_ID;
                 if (ADMIN_ID) {
-                    const { sendTelegramMessage } = require("./telegram");
-                    const msg = `✅ <b>Paiement confirmé</b>\n\nMéthode: <b>${method}</b>\nMontant: <b>${usdAmount}$</b>\nClient wallet: <code>${payment.wallet}</code>\nTX: <code>${result.txSignature}</code>`;
+                    const usdtStatus = sendResult.success ? "✅ Envoyés" : `❌ Échec: ${sendResult.error}`;
+                    const msg = `✅ <b>Paiement confirmé + USDT envoyés</b>\n\nMéthode: <b>${method}</b>\nMontant: <b>${usdAmount}$</b>\nUSDT envoyés: <b>${totalTokens} USDT</b>\nStatut USDT: <b>${usdtStatus}</b>\nClient wallet: <code>${payment.wallet}</code>\nTX paiement: <code>${result.txSignature}</code>\nTX USDT: <code>${sendResult.signature || 'N/A'}</code>`;
                     await sendTelegramMessage(ADMIN_ID, msg);
                 }
                 
-                console.log(`✅ Paiement confirmé pour session ${sessionId}`);
+                console.log(`✅ Paiement complété pour session ${sessionId}`);
             }
         }
     }
