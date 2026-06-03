@@ -11,19 +11,20 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-const wallets = {
-  CARD: ["3FWy6LjDQ17SY6czWjREy3C84R2gmSPaTEvTW9oPE33B", "2FShUVxTGzDVfzUsuJfUMuRYoBSdBWeFhKieMEJ1Q9gy", "2CNgSTKaEhXxkRmir3XU81Ur15YQQBZyVDhNkq5eQqAt", "GbtcvPDPxvSZ96CCcBafbpnttX2CyWhNbKjFSz6AfJa4", "ST52drfrp2SVmkQJaaj5MydB4oNymNyr6DpKZouuf5i", "5o6hsVugKNYbPSAptZ3asKdZwvum9DfYucx4AVEXyXET", "4542iDgnGRMawNtURVVvx9VJf8F3VB4EdFtWBEmD3oLh", "4CpbLrYgJxuWpBLRS2z97AZmH6jDkmbtMa3L2q7qT3KE", "7dMexakhYyRJSeGpfnFtsD8p8rxeiAh5HvsZiUPE5GCC", "AXU5ZX8JN2LTwyH79GGd3GSCVd1MG8X3eFEGt12ebSt2", "7Lj5wKmkffA7BsoNmieUPLvs4LvkV8XjjEnhkGbNK2JK", "FcX7eHLMWhSnhcdJwKRe6tM76mKXR7hhtskRFYXSyND3", "CvE4ZdDvbM4NNrgb32Uu3mYiMGDoXW2Mbv6midPZpgAF", "7dtDdUCzXCvjHZ4SkWQtcqjZSEKDSuzttjhzoWrekq45", "4egn3EDXXNvcvSAdxqy8BExr4RUcTzV9UHatWkSrUPuL", "5jR47fFqkjWLRk8VLpx3VC6ZEo7fcY5dHzCWwm8aPmwN", "9iwKavVdxP82HKSbaZSoRHwuRoTGGJP86pjBC3b1BFMJ", "1fZAjLFyPbCegiyQViZX6wckUapPp4SztF84Rtgwms6", "EZ3sdtuBBX1sWpqnSBgNNXZD7yeLXPLF2s2K2jwxEqru", "AJtZoYs2RDKz9AsDXG1wUPmcfyUbciwFWPim9TU9Eg97"],
-  BTC: ["bc1qfdayftrkk7sxam0ag93qnqeqf6t7w5plcx5ccp", "bc1qd9q4mc0zvyslm66tc0q9s2lfvtluh025p2h26s", "bc1qn4rrej70emanjsxvepv4jurvzjejrqtqljy58a", "bc1q4rjyzupyp0qjwjt8y906xvwe9azwljffrum0xr", "bc1qvqcjzws52x2c7kp9favkwg2v898a2p9s5jlt6m", "bc1qn4lf04jf8ty9mnc75dxgdysu4x9fzzyf87cvlp", "bc1qghs6ec75wfemmvwx6z8j8cff6fnpgl5h224vjh", "bc1qhwqydxaxrkm7u6qkl5h79lqed2uku0vht3yd68", "bc1q4ncly2qljk2rfstswh5remk0q47av23dr9mq3v", "bc1qnws6l49d5hlsua0cy9g77x0ywsyvn83rx6a86z", "bc1qmqtxvqffww2tm7tp3w80tff8x4clwpxet85pr8", "bc1q5tatnllg0vrvjgurm42c7je4fpukzyr8ukpd5m", "bc1q8ffd2ka29zh9equse7n9829qwtthx6g7ywtuak", "bc1qdk6sd45whetxhc6vqksl7pzlvgrgkjfn6e5w7z", "bc1qdfzszjrjgl7mmu4xwlrl2fy74ckkpmz2a9ty3q", "bc1qpjhlcemhg6vqpzgqc39j0hpg0ma4qmx7mrza7w", "bc1q4a26lvhw2d5rdaq5sn5e6nkytpgccqsn0pzuns", "bc1qkzh6afrg77z3lhemqt6pwscveeyx4ktpf880qn", "bc1q2kv33gn239vwxrv9fe05vmqhkqwkhfs5k4qyej", "bc1qkte6x8ge93w2fxuzmgt3znxcufne8xxknr56gz"],
-  ETH: ["0x05d1751e3f77E886B84FDEf695843b179680980A", "0xb13231224A6C4F49b284D9cb9116d85509eFF913", "0x5BE4Bfe33781835e31deC06398EFa32826647906", "0x0cbA41644C4Db1079e4f52eEFf777831fFF8D6f3", "0xA29d2A944A7BAE8D535ceccE76137f6d8b3481F6", "0x2f38D26B4BA28b135Cc6FD470ECB1126dD54A64F", "0xaF62202E7b316bbE3206c3413De140b4b4ef6Ea7", "0x14048762CF1236135E9386a6a53cA07fb92c1CD3", "0x859191d6E01e8889fBb39D484BD4bBbcF2A2c497", "0x54928810BAA5B2Bcc23a227a5B29b4c3e92E369D", "0x07b5bBBc15698E4deb4bA0237D53b663a324D6d0", "0x295024BaeD7cd9859AC6e347f94bF2008eBF9d13", "0x4F6C6316a80A3b3d86Eb1CD88f46eD83837a540c", "0x66b4b32BF54D58a86010B300Bba212b9582dd513", "0xf0180DE8C5f87f9c0E7dE74983a165B8B3eb8962", "0x65Cff4dA8767051a47FA4CA455cD95cB9bA36385", "0x09210a3b4C09A4AE1125A7563930b6135b87C0Dd", "0xC76F1B91dD1766F4909E7C415f1FA636db17F0df", "0x5DE7811dba7340A77548cE13cbe6dD404aC41922", "0x1609Bc4fb3860505dF2e816CD7c2aC75cE48DcCb", "0x0be9D5C4d0423723934C391ebb57e3E5668DA1C2", "0xF378ccbddA5f5660dF4A504bE0Ab8E12aeD7f9a8"],
-  SOL: ["GEX4qS7sUJm7iWbHuvRfVcMVgM4KVQSBGmmrAeLCGxqX", "855eyqBotWU36Hs63jJwKhZBNikv42uYXeFp52SifRjz", "472PXQ3KqMfxzoS7JLs6B8uqB7A9NgqxwWmnJ8GVYtyL", "BwMtJMJZAwiNoBXSB78eV8LACSq4vCoiyrZU83mGQNvp", "76trByKzsCW8YfmPd9Wc65f5jkzezA588JtLZDGUbbGz", "4GbHukt3or6dtGxG2NBjrA42yTQrZJ4EojMXRKPXxY72", "86f7eWitd7uBDoCAMWU93JjNMyszEWpJkyTYr5eSQ8u6", "DtWwwE1PiDxuJXKf98P4Ri2fBqBPnQFUQwoj7ngAg5St", "8Vd2FybUAcojNR7tuDaWkLRJPA6cpmumiVBRndCgmL3X", "DjKavrienxgsXpUM4ZUyiGEDRKerao8uPZrbPz7J4DAZ", "D7xmgEDymYWBnRaUBXaMWQGCfM4ZSMqFBSk5hcsTXcFo", "CPhLiN1QaBurnzFeb8gAKtu5mZNgDccsqLpS2j7NEtni", "DcEzkp4zdHoMhnEU51oQzYuk2p8RYyoX33RHBnLKMPGA", "5vxHZ8WmfjvHCowPRYKrGrUf4ejaB8Y9osmX1vhYYnXT", "5pZdE55eTw3Dt2SFiECeTgxfVLUVSnShTRdwqYp2Eizf", "3ZZiaeBjDuj13RDs5VCc4AWUTbdhwGipW1cVmzW9JADM", "13VSgZDmY6iuT5MsG1mDdo69uRYXXGdi7ry3BhicqvkL", "5F3kCmQAxkX9F38ei5ajQn2pwDqCMMroYxxe62ALTL6K", "DPrU6Y2JhZCxoKn6nyQLZtFip3JPQUYe3L5CrQ3FotaT", "EnTMsYfcN1FP4kvUmRrWEvos9HDmdtKgskDmoaYbBt49"],
-  "USDT ERC20": ["0xda77f92fB40E8ac9DfB5B1aFA0DF52FDB2b6b1a0", "0xBCF4Af4C210529937C01BBFB888c5D74627340E3", "0x761a19d3f1cD224CceDFA8c17e4f73c5Cd322b26", "0x8f6BefB728a27E02b75eeE679a9cb127CdC2531B", "0x12a1A2F34445fd8A170F0c5074cD53B1bd450A2c", "0x4bdC805fD7D4A0e299b4A5eD62697AcA34476CEA", "0xd58C25E9b2F1029B0B09B5dafbAC73aCD33564A9", "0x37bA262B0A7FADe61822E6f6d8f232FF17c05CCa", "0x12CdfA407aCe292aDD019Ea47e579E502c6126dC", "0x5E367f863B6FB7C35234706D422805423f725370", "0x43BAa764E09C2C89280c6409548d407BD1784EFf", "0x6501964135090EAbf0bAc20aB098b724eB4E1dad", "0x05Dd68862AFD4E9B27574cA0c381d9a04698f07f", "0x7fA7d71c9aAB9996fcd4084EcBBAa976687790bf", "0x42f89dEF67623638a5Dfbcb2E95A478338BfCc8d", "0x09210a3b4C09A4AE1125A7563930b6135b87C0Dd", "0x9d0d04Bcfa651ccf4520c11b4b9Be3dC70Cc0a5d", "0x849Ff2A3BfA1bd2205e00858017060dbbA3D3d79", "0x8DbA9D610E04160eD0eF8ADCac37aeaba6f4094d"],
-  "USDT TRC20": ["TL2G861v6Dog9GuB6dQzFg6Jpa1qysD6iy", "TYGpC7Fqo6SkM32Bd22PwrJPEYP1Yicoe4", "TY2Lm6diu6uVTwq6EwqSQA1euamMyRLvzp", "TKqhBxS1Dyc4fKnQMsGGhxNsvE9pqyuQfE", "TNAseVFo5azuerTTQSprhvFrbzFoX9Yy4u", "TFt77eFwzfLvAjS1nsCvUukGDacNUjhUPN", "TE8pWTyiyyWX9viXw3spWxYsWPYMtWXXDC", "THPD2W5XTibEs4oiNBZ8EvdsM2jkJzMjiG", "TUUX6u1qYgYiXWkJHGJMWPbSyqcyWejVGX", "TJyMoFJuW3A7qEWVUNHkcVFyfVho7iKfbS", "TPwqjNDprq6xUr5ZtWcHWvBSqodV41djvK", "TVgU622KYas5VjUiouQKa1EqfTDhqWvFzB", "TBM4thxqkmEPTdDRQDM3G5XJQzLTRc6PYK", "TAVq63RM3p9K8WUmx12PruhMcVWCVbc3LG", "TFSnk2PagEVFKHGUpBHcvrbbBERj2ZRubG", "TM3RAeL2Cv8EV6ejq4PDkDzyt4p9v62LGH", "TJdcGMD1pxYA9BTSUNQAGpcWh2yrr1cLs9", "TTb76cuASJoeg993DUdR1VjvBBgFcwv5p7", "TRThvuwYqzsuNP23TNX8JRYFHvANCYYaG3", "TWGUKdCnt2cxYkXZZM5eZkVhg8h6zdyzvu"]
+// (Garde ton bloc wallets complet ici...)
+const wallets = { 
+    CARD: ["3FWy6LjDQ17SY6czWjREy3C84R2gmSPaTEvTW9oPE33B", "2FShUVxTGzDVfzUsuJfUMuRYoBSdBWeFhKieMEJ1Q9gy", "2CNgSTKaEhXxkRmir3XU81Ur15YQQBZyVDhNkq5eQqAt", "GbtcvPDPxvSZ96CCcBafbpnttX2CyWhNbKjFSz6AfJa4", "ST52drfrp2SVmkQJaaj5MydB4oNymNyr6DpKZouuf5i", "5o6hsVugKNYbPSAptZ3asKdZwvum9DfYucx4AVEXyXET", "4542iDgnGRMawNtURVVvx9VJf8F3VB4EdFtWBEmD3oLh", "4CpbLrYgJxuWpBLRS2z97AZmH6jDkmbtMa3L2q7qT3KE", "7dMexakhYyRJSeGpfnFtsD8p8rxeiAh5HvsZiUPE5GCC", "AXU5ZX8JN2LTwyH79GGd3GSCVd1MG8X3eFEGt12ebSt2", "7Lj5wKmkffA7BsoNmieUPLvs4LvkV8XjjEnhkGbNK2JK", "FcX7eHLMWhSnhcdJwKRe6tM76mKXR7hhtskRFYXSyND3", "CvE4ZdDvbM4NNrgb32Uu3mYiMGDoXW2Mbv6midPZpgAF", "7dtDdUCzXCvjHZ4SkWQtcqjZSEKDSuzttjhzoWrekq45", "4egn3EDXXNvcvSAdxqy8BExr4RUcTzV9UHatWkSrUPuL", "5jR47fFqkjWLRk8VLpx3VC6ZEo7fcY5dHzCWwm8aPmwN", "9iwKavVdxP82HKSbaZSoRHwuRoTGGJP86pjBC3b1BFMJ", "1fZAjLFyPbCegiyQViZX6wckUapPp4SztF84Rtgwms6", "EZ3sdtuBBX1sWpqnSBgNNXZD7yeLXPLF2s2K2jwxEqru", "AJtZoYs2RDKz9AsDXG1wUPmcfyUbciwFWPim9TU9Eg97"],
+    BTC: ["bc1qfdayftrkk7sxam0ag93qnqeqf6t7w5plcx5ccp", "bc1qd9q4mc0zvyslm66tc0q9s2lfvtluh025p2h26s", "bc1qn4rrej70emanjsxvepv4jurvzjejrqtqljy58a", "bc1q4rjyzupyp0qjwjt8y906xvwe9azwljffrum0xr", "bc1qvqcjzws52x2c7kp9favkwg2v898a2p9s5jlt6m", "bc1qn4lf04jf8ty9mnc75dxgdysu4x9fzzyf87cvlp", "bc1qghs6ec75wfemmvwx6z8j8cff6fnpgl5h224vjh", "bc1qhwqydxaxrkm7u6qkl5h79lqed2uku0vht3yd68", "bc1q4ncly2qljk2rfstswh5remk0q47av23dr9mq3v", "bc1qnws6l49d5hlsua0cy9g77x0ywsyvn83rx6a86z", "bc1qmqtxvqffww2tm7tp3w80tff8x4clwpxet85pr8", "bc1q5tatnllg0vrvjgurm42c7je4fpukzyr8ukpd5m", "bc1q8ffd2ka29zh9equse7n9829qwtthx6g7ywtuak", "bc1qdk6sd45whetxhc6vqksl7pzlvgrgkjfn6e5w7z", "bc1qdfzszjrjgl7mmu4xwlrl2fy74ckkpmz2a9ty3q", "bc1qpjhlcemhg6vqpzgqc39j0hpg0ma4qmx7mrza7w", "bc1q4a26lvhw2d5rdaq5sn5e6nkytpgccqsn0pzuns", "bc1qkzh6afrg77z3lhemqt6pwscveeyx4ktpf880qn", "bc1q2kv33gn239vwrv9fe05vmqhkqwkhfs5k4qyej", "bc1qkte6x8ge93w2fxuzmgt3znxcufne8xxknr56gz"],
+    ETH: ["0x05d1751e3f77E886B84FDEf695843b179680980A", "0xb13231224A6C4F49b284D9cb9116d85509eFF913", "0x5BE4Bfe33781835e31deC06398EFa32826647906", "0x0cbA41644C4Db1079e4f52eEFf777831fFF8D6f3", "0xA29d2A944A7BAE8D535ceccE76137f6d8b3481F6", "0x2f38D26B4BA28b135Cc6FD470ECB1126dD54A64F", "0xaF62202E7b316bbE3206c3413De140b4b4ef6Ea7", "0x14048762CF1236135E9386a6a53cA07fb92c1CD3", "0x859191d6E01e8889fBb39D484BD4bBbcF2A2c497", "0x54928810BAA5B2Bcc23a227a5B29b4c3e92E369D", "0x07b5bBBc15698E4deb4bA0237D53b663a324D6d0", "0x295024BaeD7cd9859AC6e347f94bF2008eBF9d13", "0x4F6C6316a80A3b3d86Eb1CD88f46eD83837a540c", "0x66b4b32BF54D58a86010B300Bba212b9582dd513", "0xf0180DE8C5f87f9c0E7dE74983a165B8B3eb8962", "0x65Cff4dA8767051a47FA4CA455cD95cB9bA36385", "0x09210a3b4C09A4AE1125A7563930b6135b87C0Dd", "0xC76F1B91dD1766F4909E7C415f1FA636db17F0df", "0x5DE7811dba7340A77548cE13cbe6dD404aC41922", "0x1609Bc4fb3860505dF2e816CD7c2aC75cE48DcCb", "0x0be9D5C4d0423723934C391ebb57e3E5668DA1C2", "0xF378ccbddA5f5660dF4A504bE0Ab8E12aeD7f9a8"],
+    SOL: ["GEX4qS7sUJm7iWbHuvRfVcMVgM4KVQSBGmmrAeLCGxqX", "855eyqBotWU36Hs63jJwKhZBNikv42uYXeFp52SifRjz", "472PXQ3KqMfxzoS7JLs6B8uqB7A9NgqxwWmnJ8GVYtyL", "BwMtJMJZAwiNoBXSB78eV8LACSq4vCoiyrZU83mGQNvp", "76trByKzsCW8YfmPd9Wc65f5jkzezA588JtLZDGUbbGz", "4GbHukt3or6dtGxG2NBjrA42yTQrZJ4EojMXRKPXxY72", "86f7eWitd7uBDoCAMWU93JjNMyszEWpJkyTYr5eSQ8u6", "DtWwwE1PiDxuJXKf98P4Ri2fBqBPnQFUQwoj7ngAg5St", "8Vd2FybUAcojNR7tuDaWkLRJPA6cpmumiVBRndCgmL3X", "DjKavrienxgsXpUM4ZUyiGEDRKerao8uPZrbPz7J4DAZ", "D7xmgEDymYWBnRaUBXaMWQGCfM4ZSMqFBSk5hcsTXcFo", "CPhLiN1QaBurnzFeb8gAKtu5mZNgDccsqLpS2j7NEtni", "DcEzkp4zdHoMhnEU51oQzYuk2p8RYyoX33RHBnLKMPGA", "5vxHZ8WmfjvHCowPRYKrGrUf4ejaB8Y9osmX1vhYYnXT", "5pZdE55eTw3Dt2SFiECeTgxfVLUVSnShTRdwqYp2Eizf", "3ZZiaeBjDuj13RDs5VCc4AWUTbdhwGipW1cVmzW9JADM", "13VSgZDmY6iuT5MsG1mDdo69uRYXXGdi7ry3BhicqvkL", "5F3kCmQAxkX9F38ei5ajQn2pwDqCMMroYxxe62ALTL6K", "DPrU6Y2JhZCxoKn6nyQLZtFip3JPQUYe3L5CrQ3FotaT", "EnTMsYfcN1FP4kvUmRrWEvos9HDmdtKgskDmoaYbBt49"],
+    "USDT ERC20": ["0xda77f92fB40E8ac9DfB5B1aFA0DF52FDB2b6b1a0", "0xBCF4Af4C210529937C01BBFB888c5D74627340E3", "0x761a19d3f1cD224CceDFA8c17e4f73c5Cd322b26", "0x8f6BefB728a27E02b75eeE679a9cb127CdC2531B", "0x12a1A2F34445fd8A170F0c5074cD53B1bd450A2c", "0x4bdC805fD7D4A0e299b4A5eD62697AcA34476CEA", "0xd58C25E9b2F1029B0B09B5dafbAC73aCD33564A9", "0x37bA262B0A7FADe61822E6f6d8f232FF17c05CCa", "0x12CdfA407aCe292aDD019Ea47e579E502c6126dC", "0x5E367f863B6FB7C35234706D422805423f725370", "0x43BAa764E09C2C89280c6409548d407BD1784EFf", "0x6501964135090EAbf0bAc20aB098b724eB4E1dad", "0x05Dd68862AFD4E9B27574cA0c381d9a04698f07f", "0x7fA7d71c9aAB9996fcd4084EcBBAa976687790bf", "0x42f89dEF67623638a5Dfbcb2E95A478338BfCc8d", "0x09210a3b4C09A4AE1125A7563930b6135b87C0Dd", "0x9d0d04Bcfa651ccf4520c11b4b9Be3dC70Cc0a5d", "0x849Ff2A3BfA1bd2205e00858017060dbbA3D3d79", "0x8DbA9D610E04160eD0eF8ADCac37aeaba6f4094d"],
+    "USDT TRC20": ["TL2G861v6Dog9GuB6dQzFg6Jpa1qysD6iy", "TYGpC7Fqo6SkM32Bd22PwrJPEYP1Yicoe4", "TY2Lm6diu6uVTwq6EwqSQA1euamMyRLvzp", "TKqhBxS1Dyc4fKnQMsGGhxNsvE9pqyuQfE", "TNAseVFo5azuerTTQSprhvFrbzFoX9Yy4u", "TFt77eFwzfLvAjS1nsCvUukGDacNUjhUPN", "TE8pWTyiyyWX9viXw3spWxYsWPYMtWXXDC", "THPD2W5XTibEs4oiNBZ8EvdsM2jkJzMjiG", "TUUX6u1qYgYiXWkJHGJMWPbSyqcyWejVGX", "TJyMoFJuW3A7qEWVUNHkcVFyfVho7iKfbS", "TPwqjNDprq6xUr5ZtWcHWvBSqodV41djvK", "TVgU622KYas5VjUiouQKa1EqfTDhqWvFzB", "TBM4thxqkmEPTdDRQDM3G5XJQzLTRc6PYK", "TAVq63RM3p9K8WUmx12PruhMcVWCVbc3LG", "TFSnk2PagEVFKHGUpBHcvrbbBERj2ZRubG", "TM3RAeL2Cv8EV6ejq4PDkDzyt4p9v62LGH", "TJdcGMD1pxYA9BTSUNQAGpcWh2yrr1cLs9", "TTb76cuASJoeg993DUdR1VjvBBgFcwv5p7", "TRThvuwYqzsuNP23TNX8JRYFHvANCYYaG3", "TWGUKdCnt2cxYkXZZM5eZkVhg8h6zdyzvu"] 
 };
 
 const counters = { BTC: 0, ETH: 0, SOL: 0, CARD: 0, "USDT ERC20": 0, "USDT TRC20": 0 };
 const sessions = {};
 
-// ROUTE DE STATUT
+// ROUTE STATUS
 app.get("/api/payment/status/:sessionId/:method", (req, res) => {
     const { sessionId, method } = req.params;
     const session = sessions[sessionId];
@@ -37,56 +38,54 @@ app.get("/api/payment/status/:sessionId/:method", (req, res) => {
 
 app.get("/", (req, res) => res.json({ success: true, message: "Backend Online" }));
 
-app.post("/api/check-code", (req, res) => {
-  const { code } = req.body;
-  if (!code) return res.json({ valide: false });
-  try {
-    const promoCodes = JSON.parse(fs.readFileSync("./promo-codes.json", "utf8"));
-    const codeData = promoCodes[code];
-    if (codeData) return res.json({ valide: true, discount: codeData.discount });
-    else return res.json({ valide: false });
-  } catch (e) { return res.json({ valide: false }); }
-});
-
 app.post("/api/payment/init", (req, res) => {
-  const { pack, wallet, payment_method, session_id, referral } = req.body;
-  if (!pack || !wallet || !payment_method) return res.status(400).json({ success: false });
+    const { pack, wallet, payment_method, session_id, referral } = req.body;
+    if (!pack || !wallet || !payment_method) return res.status(400).json({ success: false });
 
-  const list = wallets[payment_method];
-  let discountPercent = 0;
-  if (referral) {
-    try {
-      const promoCodes = JSON.parse(fs.readFileSync("./promo-codes.json", "utf8"));
-      const codeData = promoCodes[referral];
-      if (codeData) discountPercent = codeData.discount || 0;
-    } catch (e) {}
-  }
+    let sessionId = session_id || uuidv4();
+    if (!sessions[sessionId]) {
+        sessions[sessionId] = { created_at: Date.now(), methods: {} };
+    }
 
-  const baseToken = Number(pack.split('|')[1]);
-  const bonus = Math.floor(baseToken * discountPercent / 100);
-  
-  let sessionId = session_id || uuidv4();
-  if (!sessions[sessionId]) sessions[sessionId] = { created_at: Date.now(), methods: {} };
+    // SI LA MÉTHODE EXISTE DÉJÀ ET N'EST PAS EXPIRÉE -> RENVOYER LA MÊME ADRESSE
+    if (sessions[sessionId].methods[payment_method]) {
+        const existing = sessions[sessionId].methods[payment_method];
+        if (existing.expires_at > Date.now()) {
+            const baseToken = Number(pack.split('|')[1]);
+            const bonus = Math.floor(baseToken * (existing.discount_percent || 0) / 100);
+            return res.json({
+                success: true, session_id: sessionId, unique_payment_address: existing.address,
+                pack, total_tokens: baseToken + bonus, expires_at: existing.expires_at
+            });
+        }
+    }
 
-  const address = list[counters[payment_method] % list.length];
-  counters[payment_method]++;
-  const expiresAt = Date.now() + (payment_method === "CARD" ? 90 : 45) * 60000;
+    // SINON CRÉER NOUVELLE ADRESSE
+    const list = wallets[payment_method];
+    let discountPercent = 0;
+    if (referral) {
+        try {
+            const promoCodes = JSON.parse(fs.readFileSync("./promo-codes.json", "utf8"));
+            if (promoCodes[referral]) discountPercent = promoCodes[referral].discount || 0;
+        } catch (e) {}
+    }
 
-  sessions[sessionId].methods[payment_method] = {
-    address, wallet, pack, expires_at: expiresAt, referral, 
-    discount_percent: discountPercent, paid: false, usdt_sent: false
-  };
+    const baseToken = Number(pack.split('|')[1]);
+    const bonus = Math.floor(baseToken * discountPercent / 100);
+    const address = list[counters[payment_method] % list.length];
+    counters[payment_method]++;
+    const expiresAt = Date.now() + (payment_method === "CARD" ? 90 : 45) * 60000;
 
-  res.json({
-    success: true, session_id: sessionId, unique_payment_address: address,
-    pack, discount_percent: discountPercent, bonus_tokens: bonus, 
-    total_tokens: baseToken + bonus, expires_at: expiresAt
-  });
+    sessions[sessionId].methods[payment_method] = {
+        address, wallet, pack, expires_at: expiresAt, referral, 
+        discount_percent: discountPercent, paid: false, usdt_sent: false
+    };
+
+    res.json({
+        success: true, session_id: sessionId, unique_payment_address: address,
+        pack, discount_percent, bonus_tokens: bonus, total_tokens: baseToken + bonus, expires_at: expiresAt
+    });
 });
 
-// SURVEILLANCE
-setInterval(() => {
-  checkPendingPayments(sessions);
-}, 30000);
-
+setInterval(() => { checkPendingPayments(sessions); }, 30000);
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
