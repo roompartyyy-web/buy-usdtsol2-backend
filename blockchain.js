@@ -44,16 +44,34 @@ async function checkPendingPayments(sessions, callback) {
                                     const receivedLamports = tx.meta.postBalances[balanceIndex] - tx.meta.preBalances[balanceIndex];
                                     const amountSOL = receivedLamports / 1e9;
                                     const priceRes = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd");
-                                    const solPrice = priceRes.data.solana.usd;
-                                    const amountInUSD = amountSOL * solPrice;
-                                    if (amountInUSD >= (usd * 0.90)) {
-                                        check = { received: true, signature: sigs[0].signature };
-                                    }
+                                    const amountInUSD = amountSOL * priceRes.data.solana.usd;
+                                    if (amountInUSD >= (usd * 0.90)) check = { received: true, signature: sigs[0].signature };
                                 }
                             }
                         }
                     }
                 } catch(e) { console.error("Err SOL:", e.message); }
+            }
+
+            // === BTC ===
+            if (m === "BTC") {
+                try {
+                    const res = await axios.get(`https://blockstream.info/api/address/${p.address}/txs`);
+                    if (res.data && res.data.length > 0) {
+                        const tx = res.data[0];
+                        const txTime = (tx.status.block_time || 0) * 1000;
+                        if (txTime > sessions[id].created_at) {
+                            let receivedSats = 0;
+                            for (const vout of tx.vout) {
+                                if (vout.scriptpubkey_address === p.address) receivedSats += vout.value;
+                            }
+                            const receivedBTC = receivedSats / 100000000;
+                            const priceRes = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd");
+                            const amountInUSD = receivedBTC * priceRes.data.bitcoin.usd;
+                            if (amountInUSD >= (usd * 0.90)) check = { received: true, signature: tx.txid };
+                        }
+                    }
+                } catch(e) { console.error("Err BTC:", e.message); }
             }
 
             // === ETH / USDT ERC20 ===
@@ -71,13 +89,27 @@ async function checkPendingPayments(sessions, callback) {
                             let amountInUSD = 0;
                             if (isUSDT) amountInUSD = Number(tx.value) / 1000000;
                             else {
-                                const ethPrice = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
-                                amountInUSD = (Number(tx.value) / 1e18) * ethPrice.data.ethereum.usd;
+                                const priceRes = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
+                                amountInUSD = (Number(tx.value) / 1e18) * priceRes.data.ethereum.usd;
                             }
                             if (amountInUSD >= (usd * 0.90)) check = { received: true, signature: tx.hash };
                         }
                     }
                 } catch(e) { console.error("Err ETH:", e.message); }
+            }
+
+            // === USDT TRC20 ===
+            if (m === "USDT TRC20") {
+                try {
+                    const res = await axios.get(`https://apilist.tronscanapi.com/api/token_trc20/transfers?limit=1&start=0&sort=-timestamp&relatedAddress=${p.address}&contract_address=TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t`);
+                    if (res.data && res.data.token_transfers && res.data.token_transfers.length > 0) {
+                        const tx = res.data.token_transfers[0];
+                        if (tx.to_address === p.address && Number(tx.block_ts) > sessions[id].created_at) {
+                            const amountInUSD = Number(tx.quant) / 1000000;
+                            if (amountInUSD >= (usd * 0.90)) check = { received: true, signature: tx.transaction_id };
+                        }
+                    }
+                } catch(e) { console.error("Err TRC20:", e.message); }
             }
 
             // === ENVOI DES TOKENS ===
