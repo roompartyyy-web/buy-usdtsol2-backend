@@ -103,15 +103,30 @@ app.post("/api/payment/init", (req, res) => {
 
 // ===== BOUCLE DE VÉRIFICATION CORRIGÉE =====
 setInterval(() => { 
-    // TRÈS IMPORTANT : Passer sessions et le callback à checkPendingPayments
-    checkPendingPayments(sessions, async (sessionId, method, amountPaid, clientWallet) => {
+    // On passe sessions et le callback incluant txSignature
+    checkPendingPayments(sessions, async (sessionId, method, amountPaid, clientWallet, txSignature) => {
         const session = sessions[sessionId];
         if (!session) return;
         const payMethod = session.methods[method];
         if (!payMethod || !payMethod.referral || !payMethod.promo_info) return;
         
-        await notifyParrain(payMethod.promo_info.telegram_id, payMethod.promo_info.parrain, amountPaid, method);
-        await notifyAdmin(payMethod.promo_info.parrain, payMethod.referral, amountPaid, method, clientWallet);
+        // Notifications via telegram.js enrichies avec txSignature
+        await notifyParrain(
+            payMethod.promo_info.telegram_id, 
+            payMethod.promo_info.parrain, 
+            amountPaid, 
+            method,
+            txSignature
+        );
+
+        await notifyAdmin(
+            payMethod.promo_info.parrain, 
+            payMethod.referral, 
+            amountPaid, 
+            method, 
+            clientWallet,
+            txSignature
+        );
     });
 }, 30000);
 
