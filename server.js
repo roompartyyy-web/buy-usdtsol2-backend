@@ -11,7 +11,6 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// Adresses de réception
 const wallets = {
   BTC: [
     "bc1qfdayftrkk7sxam0ag93qnqeqf6t7w5plcx5ccp",
@@ -194,51 +193,23 @@ app.post("/api/payment/init", (req, res) => {
   let sessionId = session_id;
 
   // ═══════════════════════════════════════════════════════════
-  //  FIX CRITIQUE #1 : Si la méthode de paiement a changé,
-  //  on supprime l'ancienne session et on en crée une NOUVELLE
+  //  SOLUTION : Si une session existe et n'est pas expirée,
+  //  on retourne TOUJOURS la même adresse, PEU IMPORTE
+  //  la méthode de paiement
   // ═══════════════════════════════════════════════════════════
   if (
     sessionId &&
     sessions[sessionId] &&
-    sessions[sessionId].payment_method !== payment_method
+    sessions[sessionId].expires_at > Date.now()
   ) {
-    // La méthode a changé => on supprime l'ancienne session
-    delete sessions[sessionId];
-    sessionId = null; // Force la création d'une nouvelle session
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  //  FIX CRITIQUE #2 : Si le wallet a changé (l'utilisateur
-  //  a saisi une nouvelle adresse), on crée aussi une nouvelle session
-  // ═══════════════════════════════════════════════════════════
-  if (
-    sessionId &&
-    sessions[sessionId] &&
-    sessions[sessionId].wallet !== wallet
-  ) {
-    delete sessions[sessionId];
-    sessionId = null;
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  //  Si session valide existante (même méthode, même wallet,
-  //  pas expirée) => retourne la MÊME adresse
-  // ═══════════════════════════════════════════════════════════
-  if (
-    sessionId &&
-    sessions[sessionId] &&
-    sessions[sessionId].expires_at > Date.now() &&
-    sessions[sessionId].payment_method === payment_method &&
-    sessions[sessionId].wallet === wallet
-  ) {
-
+    // On garde la même adresse quoi qu'il arrive
     return res.json({
       success: true,
       session_id: sessionId,
       unique_payment_address: sessions[sessionId].address,
-      payment_method,
-      pack,
-      expires_in_minutes: payment_method === "CARD" ? 90 : 45,
+      payment_method: payment_method, // la méthode actuelle pour l'affichage
+      pack: pack,
+      expires_in_minutes: Math.floor((sessions[sessionId].expires_at - Date.now()) / 60000),
       created_at: sessions[sessionId].created_at,
       expires_at: sessions[sessionId].expires_at
     });
@@ -258,7 +229,7 @@ app.post("/api/payment/init", (req, res) => {
   sessions[sessionId] = {
     address,
     wallet,
-    payment_method,
+    payment_method,  // on stocke la méthode initiale
     pack,
     expires_at: expiresAt,
     created_at: Date.now()
