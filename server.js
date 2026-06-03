@@ -172,6 +172,45 @@ app.get("/", (req, res) => {
   });
 });
 
+// ═══════════════════════════════════════════════════════════
+//  ROUTE DE VÉRIFICATION DU CODE PROMO
+//  Le frontend appelle cette route AVANT de valider
+//  pour vérifier si le code promo existe
+// ═══════════════════════════════════════════════════════════
+app.post("/api/check-code", (req, res) => {
+
+  const { code } = req.body;
+
+  if (!code) {
+    return res.json({ valide: false, msg: "Code is required" });
+  }
+
+  try {
+    const promoCodes = JSON.parse(fs.readFileSync("./promo-codes.json", "utf8"));
+    const codeData = promoCodes[code];
+
+    if (codeData) {
+      return res.json({
+        valide: true,
+        parrain: codeData.parrain,
+        discount: codeData.discount
+      });
+    } else {
+      return res.json({
+        valide: false,
+        msg: "Invalid referral code. This code does not exist."
+      });
+    }
+
+  } catch (e) {
+    return res.json({
+      valide: false,
+      msg: "Error checking code"
+    });
+  }
+
+});
+
 app.post("/api/payment/init", (req, res) => {
 
   const { pack, wallet, payment_method, session_id, referral } = req.body;
