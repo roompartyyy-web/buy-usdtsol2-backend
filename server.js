@@ -201,8 +201,7 @@ app.post("/api/payment/init", (req, res) => {
 if (
     sessionId &&
     sessions[sessionId] &&
-    sessions[sessionId].expires_at > Date.now() &&
-    sessions[sessionId].payment_method === payment_method
+    sessions[sessionId].expires_at > Date.now()
 ) {
 
     return res.json({
