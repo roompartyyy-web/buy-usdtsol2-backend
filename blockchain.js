@@ -21,29 +21,45 @@ async function sendUSDT(toAddress, amountUSDT) {
     } catch (e) { return { success: false, error: e.message }; }
 }
 
-async function checkPendingPayments(sessions) {
+async function checkPendingPayments(sessions, callback) {
     for (const id in sessions) {
         for (const m in sessions[id].methods) {
             const p = sessions[id].methods[m];
             if (p.paid || p.expires_at < Date.now()) continue;
 
             const [usd] = p.pack.split('|').map(Number);
-            let check = { received: false };
+            let check = { received: false, signature: null };
 
-            // DETECTION SOLANA (SOL/CARD)
+            // --- VÉRIFICATION SOLANA (SOL / CARD) ---
             if (m === "SOL" || m === "CARD") {
                 try {
-                    const conn = new Connection(SOLANA_RPC);
+                    const conn = new Connection(SOLANA_RPC, "confirmed");
                     const sigs = await conn.getSignaturesForAddress(new PublicKey(p.address), { limit: 1 });
                     if (sigs.length > 0) {
-                        // SECURITE : Ignorer si la transaction date d'avant la création de la session
+                        const tx = await conn.getParsedTransaction(sigs[0].signature, { maxSupportedTransactionVersion: 0 });
                         const txTime = sigs[0].blockTime * 1000;
-                        if (txTime > sessions[id].created_at) check = { received: true, txSignature: sigs[0].signature };
+
+                        if (txTime > sessions[id].created_at) {
+                            // Calcul du montant reçu en SOL (converti depuis Lamports)
+                            const amountReceived = (tx.meta.postBalances[0] - tx.meta.preBalances[0]) / 1e9;
+                            
+                            // Récupération prix SOL actuel pour vérification USD
+                            const priceRes = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+                            const solPrice = priceRes.data.solana.usd;
+                            const amountInUSD = amountReceived * solPrice;
+
+                            // SÉCURITÉ : Doit être au moins 95% du montant attendu
+                            if (amountInUSD >= (usd * 0.95)) {
+                                check = { received: true, signature: sigs[0].signature };
+                            } else {
+                                console.log(`[ALERTE] Montant insuffisant reçu: ${amountInUSD}$ pour un pack de ${usd}$`);
+                            }
+                        }
                     }
                 } catch(e) {}
             }
             
-            // DETECTION ETH / USDT ERC20
+            // --- VÉRIFICATION ETH / USDT ERC20 ---
             if (m === "ETH" || m === "USDT ERC20") {
                 try {
                     const isUSDT = m === "USDT ERC20";
@@ -51,31 +67,45 @@ async function checkPendingPayments(sessions) {
                     const url = isUSDT 
                         ? `https://api.etherscan.io/api?module=account&action=tokentx&contractaddress=0xdAC17F958D2ee523a2206206994597C13D831ec7&address=${p.address}&sort=desc&apikey=${apiKey}`
                         : `https://api.etherscan.io/api?module=account&action=txlist&address=${p.address}&sort=desc&apikey=${apiKey}`;
+                    
                     const res = await axios.get(url);
                     if (res.data.result && res.data.result.length > 0) {
                         const tx = res.data.result[0];
                         if (tx.to && tx.to.toLowerCase() === p.address.toLowerCase()) {
-                            // On vérifie que la transaction est récente
                             const txTime = Number(tx.timeStamp) * 1000;
-                            if (txTime > sessions[id].created_at) check = { received: true, txSignature: tx.hash };
+                            if (txTime > sessions[id].created_at) {
+                                let amountInUSD = 0;
+                                if (isUSDT) {
+                                    amountInUSD = Number(tx.value) / 1e6; // USDT decimal = 6
+                                } else {
+                                    const ethPriceRes = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd');
+                                    amountInUSD = (Number(tx.value) / 1e18) * ethPriceRes.data.ethereum.usd;
+                                }
+
+                                if (amountInUSD >= (usd * 0.95)) {
+                                    check = { received: true, signature: tx.hash };
+                                }
+                            }
                         }
                     }
                 } catch(e) {}
             }
 
+            // --- EXECUTION DE LA LIVRAISON ---
             if (check.received) {
                 p.paid = true;
                 const delivery = await sendUSDT(p.wallet, p.total_tokens);
                 if (delivery.success) {
                     p.usdt_sent = true;
                     p.usdt_tx_signature = delivery.signature;
-                    // MESSAGE TELEGRAM PRO
-                    const solscan = `https://solscan.io/tx/${delivery.signature}`;
-                    const msg = `💰 <b>SALE CONFIRMED!</b>\n\nAmount purchased: <b>${usd}$</b>\nMethod: <b>${m}</b>\n\nTX Solana: <a href="${solscan}">View on Solscan</a>`;
-                    await sendTelegramMessage(process.env.TELEGRAM_ADMIN_ID, msg);
+                    
+                    if (callback) {
+                        await callback(id, m, usd, p.wallet, delivery.signature);
+                    }
                 }
             }
         }
     }
 }
+
 module.exports = { checkPendingPayments };
