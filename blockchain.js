@@ -7,7 +7,7 @@ const { notifyParrain, notifyAdmin } = require("./telegram");
 require("dotenv").config();
 
 const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
-const USDT_MINT = new PublicKey("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB");
+const USDT_MINT = new PublicKey("DrnoyNZVRzYZwRbDPmN9hhJzGgD3AXtyZYPqdBzrstFQ");
 
 // ═══════════════════════════════════════════════════════════
 //  ENVOI DES USDT AU CLIENT (via Solana)
