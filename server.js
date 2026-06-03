@@ -3,7 +3,9 @@ const express = require("express");
 const cors = require("cors");
 const { v4: uuidv4 } = require("uuid");
 const fs = require("fs");
+const path = require("path");
 const { checkPendingPayments } = require("./blockchain");
+const { notifyParrain, notifyAdmin } = require("./telegram");
 
 const app = express();
 app.use(cors());
@@ -23,7 +25,19 @@ const wallets = {
 let counters = { BTC: 0, ETH: 0, SOL: 0, CARD: 0, "USDT ERC20": 0, "USDT TRC20": 0 };
 let sessions = {};
 
-// ROUTE STATUS
+// ===== LECTURE DES CODES PROMO DEPUIS LE FICHIER JSON =====
+function loadPromoCodes() {
+    try {
+        const filePath = path.join(__dirname, "promo-codes.json");
+        const data = fs.readFileSync(filePath, "utf-8");
+        return JSON.parse(data);
+    } catch (e) {
+        console.error("Erreur lecture promo-codes.json:", e.message);
+        return {};
+    }
+}
+
+// ===== ROUTES =====
 app.get("/api/payment/status/:sessionId/:method", (req, res) => {
     const { sessionId, method } = req.params;
     if (!sessions[sessionId] || !sessions[sessionId].methods[method]) return res.json({ status: "not_found" });
@@ -35,42 +49,115 @@ app.get("/api/payment/status/:sessionId/:method", (req, res) => {
     });
 });
 
+// ===== ROUTE PROMO CODE (lit depuis promo-codes.json) =====
+app.post("/api/check-code", (req, res) => {
+    try {
+        const { code } = req.body;
+        if (!code) return res.status(400).json({ valid: false, message: "Code requis" });
+
+        const codes = loadPromoCodes();
+        const promo = codes[code.toLowerCase().trim()];
+
+        if (promo) {
+            return res.json({ 
+                valid: true, 
+                percentage: promo.discount,
+                parrain: promo.parrain 
+            });
+        }
+        return res.status(404).json({ valid: false, message: "Code invalide" });
+    } catch(e) {
+        res.status(500).json({ valid: false, message: "Erreur serveur" });
+    }
+});
+
 app.post("/api/payment/init", (req, res) => {
     try {
         const { pack, wallet, payment_method, session_id, referral } = req.body;
         let sessionId = session_id || uuidv4();
         if (!sessions[sessionId]) sessions[sessionId] = { created_at: Date.now(), methods: {} };
 
-        // LOGIQUE CRITIQUE : SI DÉJÀ PAYÉ OU EXPIRÉ -> NOUVELLE ADRESSE
+        // Si déjà payé ou expiré -> nouvelle adresse
         if (sessions[sessionId].methods[payment_method]) {
             const old = sessions[sessionId].methods[payment_method];
             if (!old.paid && old.expires_at > Date.now()) {
                 return res.json({
                     success: true, session_id: sessionId, unique_payment_address: old.address,
-                    pack, total_tokens: old.total_tokens, expires_at: old.expires_at
+                    pack, total_tokens: old.total_tokens, expires_at: old.expires_at,
+                    discount_percent: old.bonus_percentage || 0,
+                    bonus_tokens: old.bonus_tokens || 0
                 });
             }
         }
 
-        // SINON : DONNER UNE NOUVELLE ADRESSE DE LA LISTE
+        // Nouvelle adresse
         const list = wallets[payment_method];
         const address = list[counters[payment_method] % list.length];
-        counters[payment_method]++; // On incrémente pour la prochaine fois
+        counters[payment_method]++;
         
         const expiresAt = Date.now() + (payment_method === "CARD" ? 90 : 45) * 60000;
         const baseToken = Number(pack.split('|')[1]);
         
+        // Vérifier le code promo
+        let bonusPercentage = 0;
+        let promoInfo = null;
+        if (referral) {
+            const codes = loadPromoCodes();
+            promoInfo = codes[referral.toLowerCase().trim()] || null;
+            if (promoInfo) bonusPercentage = promoInfo.discount;
+        }
+        
+        const bonusTokens = baseToken * bonusPercentage / 100;
+        const totalTokens = baseToken + bonusTokens;
+        
         sessions[sessionId].methods[payment_method] = {
-            address, wallet, pack, expires_at: expiresAt, referral, 
-            paid: false, usdt_sent: false, total_tokens: baseToken
+            address, wallet: wallet, pack, expires_at: expiresAt, 
+            referral: referral || null, paid: false, usdt_sent: false, 
+            total_tokens: totalTokens, base_tokens: baseToken,
+            bonus_percentage: bonusPercentage, bonus_tokens: bonusTokens,
+            promo_info: promoInfo
         };
 
         res.json({
             success: true, session_id: sessionId, unique_payment_address: address,
-            pack, total_tokens: baseToken, expires_at: expiresAt
+            pack, total_tokens: totalTokens, expires_at: expiresAt,
+            discount_percent: bonusPercentage,
+            bonus_tokens: bonusTokens
         });
-    } catch(e) { res.status(500).json({ success: false }); }
+    } catch(e) { 
+        console.error("Init error:", e);
+        res.status(500).json({ success: false }); 
+    }
 });
 
-setInterval(() => { checkPendingPayments(sessions); }, 30000);
+// ===== CHECK PENDING PAYMENTS =====
+setInterval(() => { 
+    checkPendingPayments(sessions, async (sessionId, method, amountPaid, clientWallet) => {
+        const session = sessions[sessionId];
+        if (!session) return;
+        
+        const payMethod = session.methods[method];
+        if (!payMethod || !payMethod.referral || !payMethod.promo_info) return;
+        
+        const promo = payMethod.promo_info;
+        
+        // Notifier le parrain sur Telegram
+        await notifyParrain(
+            promo.telegram_id,
+            promo.parrain,
+            amountPaid,
+            method
+        );
+        
+        // Notifier l'admin
+        await notifyAdmin(
+            promo.parrain,
+            payMethod.referral,
+            amountPaid,
+            method,
+            clientWallet
+        );
+    });
+}, 30000);
+
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
