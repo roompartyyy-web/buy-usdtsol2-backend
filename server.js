@@ -191,17 +191,13 @@ app.post("/api/payment/init", (req, res) => {
     });
   }
 
-  const address =
-    list[counters[payment_method] % list.length];
-
-  counters[payment_method]++;
-
   let sessionId = session_id;
 
 if (
     sessionId &&
     sessions[sessionId] &&
-    sessions[sessionId].expires_at > Date.now()
+    sessions[sessionId].expires_at > Date.now() &&
+    sessions[sessionId].payment_method === payment_method
 ) {
 
     return res.json({
@@ -218,14 +214,19 @@ if (
 
 }
 
+const address =
+    list[counters[payment_method] % list.length];
+
+counters[payment_method]++;
+
 sessionId = uuidv4();
 
-  const expiresInMinutes =
+const expiresInMinutes =
     payment_method === "CARD"
       ? 90
       : 45;
 
-  sessions[sessionId] = {
+sessions[sessionId] = {
   address,
   payment_method,
   pack,
