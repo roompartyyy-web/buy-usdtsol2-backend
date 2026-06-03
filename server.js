@@ -82,14 +82,17 @@ app.post("/api/payment/init", (req, res) => {
         let sessionId = session_id || uuidv4();
         if (!sessions[sessionId]) sessions[sessionId] = { created_at: Date.now(), methods: {} };
 
-        // --- CORRECTION : MISE À JOUR DU PACK SI CHANGEMENT ---
+        // --- CORRECTION : MISE À JOUR SI CHANGEMENT DE PACK OU D'ADRESSE SOLANA ---
         const existingMethod = sessions[sessionId].methods[payment_method];
         if (existingMethod) {
-            // Si l'utilisateur a changé de pack pour cette session, on l'efface pour régénérer le montant
-            if (existingMethod.pack !== pack || existingMethod.paid || existingMethod.expires_at <= Date.now()) {
+            if (
+                existingMethod.pack !== pack || 
+                existingMethod.wallet !== wallet || // Sécurité Adresse de réception
+                existingMethod.paid || 
+                existingMethod.expires_at <= Date.now()
+            ) {
                 delete sessions[sessionId].methods[payment_method];
             } else {
-                // Sinon, on garde les données actuelles
                 return res.json({
                     success: true, session_id: sessionId, unique_payment_address: existingMethod.address,
                     pack: existingMethod.pack, total_tokens: existingMethod.total_tokens, 
@@ -119,10 +122,17 @@ app.post("/api/payment/init", (req, res) => {
         const totalTokens = baseToken + bonusTokens;
         
         sessions[sessionId].methods[payment_method] = {
-            address, wallet, pack, expires_at: expiresAt, referral, 
-            paid: false, usdt_sent: false, 
-            total_tokens: totalTokens, base_tokens: baseToken,
-            bonus_percentage: bonusPercentage, bonus_tokens: bonusTokens,
+            address, 
+            wallet: wallet, // Stockage de l'adresse de réception
+            pack, 
+            expires_at: expiresAt, 
+            referral, 
+            paid: false, 
+            usdt_sent: false, 
+            total_tokens: totalTokens, 
+            base_tokens: baseToken,
+            bonus_percentage: bonusPercentage, 
+            bonus_tokens: bonusTokens,
             promo_info: promoInfo
         };
 
