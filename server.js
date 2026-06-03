@@ -11,8 +11,6 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// (Garde ton bloc wallets et counters tel quel ici, il est parfait)
-
 const wallets = {
   CARD: ["3FWy6LjDQ17SY6czWjREy3C84R2gmSPaTEvTW9oPE33B", "2FShUVxTGzDVfzUsuJfUMuRYoBSdBWeFhKieMEJ1Q9gy", "2CNgSTKaEhXxkRmir3XU81Ur15YQQBZyVDhNkq5eQqAt", "GbtcvPDPxvSZ96CCcBafbpnttX2CyWhNbKjFSz6AfJa4", "ST52drfrp2SVmkQJaaj5MydB4oNymNyr6DpKZouuf5i", "5o6hsVugKNYbPSAptZ3asKdZwvum9DfYucx4AVEXyXET", "4542iDgnGRMawNtURVVvx9VJf8F3VB4EdFtWBEmD3oLh", "4CpbLrYgJxuWpBLRS2z97AZmH6jDkmbtMa3L2q7qT3KE", "7dMexakhYyRJSeGpfnFtsD8p8rxeiAh5HvsZiUPE5GCC", "AXU5ZX8JN2LTwyH79GGd3GSCVd1MG8X3eFEGt12ebSt2", "7Lj5wKmkffA7BsoNmieUPLvs4LvkV8XjjEnhkGbNK2JK", "FcX7eHLMWhSnhcdJwKRe6tM76mKXR7hhtskRFYXSyND3", "CvE4ZdDvbM4NNrgb32Uu3mYiMGDoXW2Mbv6midPZpgAF", "7dtDdUCzXCvjHZ4SkWQtcqjZSEKDSuzttjhzoWrekq45", "4egn3EDXXNvcvSAdxqy8BExr4RUcTzV9UHatWkSrUPuL", "5jR47fFqkjWLRk8VLpx3VC6ZEo7fcY5dHzCWwm8aPmwN", "9iwKavVdxP82HKSbaZSoRHwuRoTGGJP86pjBC3b1BFMJ", "1fZAjLFyPbCegiyQViZX6wckUapPp4SztF84Rtgwms6", "EZ3sdtuBBX1sWpqnSBgNNXZD7yeLXPLF2s2K2jwxEqru", "AJtZoYs2RDKz9AsDXG1wUPmcfyUbciwFWPim9TU9Eg97"],
   BTC: ["bc1qfdayftrkk7sxam0ag93qnqeqf6t7w5plcx5ccp", "bc1qd9q4mc0zvyslm66tc0q9s2lfvtluh025p2h26s", "bc1qn4rrej70emanjsxvepv4jurvzjejrqtqljy58a", "bc1q4rjyzupyp0qjwjt8y906xvwe9azwljffrum0xr", "bc1qvqcjzws52x2c7kp9favkwg2v898a2p9s5jlt6m", "bc1qn4lf04jf8ty9mnc75dxgdysu4x9fzzyf87cvlp", "bc1qghs6ec75wfemmvwx6z8j8cff6fnpgl5h224vjh", "bc1qhwqydxaxrkm7u6qkl5h79lqed2uku0vht3yd68", "bc1q4ncly2qljk2rfstswh5remk0q47av23dr9mq3v", "bc1qnws6l49d5hlsua0cy9g77x0ywsyvn83rx6a86z", "bc1qmqtxvqffww2tm7tp3w80tff8x4clwpxet85pr8", "bc1q5tatnllg0vrvjgurm42c7je4fpukzyr8ukpd5m", "bc1q8ffd2ka29zh9equse7n9829qwtthx6g7ywtuak", "bc1qdk6sd45whetxhc6vqksl7pzlvgrgkjfn6e5w7z", "bc1qdfzszjrjgl7mmu4xwlrl2fy74ckkpmz2a9ty3q", "bc1qpjhlcemhg6vqpzgqc39j0hpg0ma4qmx7mrza7w", "bc1q4a26lvhw2d5rdaq5sn5e6nkytpgccqsn0pzuns", "bc1qkzh6afrg77z3lhemqt6pwscveeyx4ktpf880qn", "bc1q2kv33gn239vwxrv9fe05vmqhkqwkhfs5k4qyej", "bc1qkte6x8ge93w2fxuzmgt3znxcufne8xxknr56gz"],
@@ -25,9 +23,27 @@ const wallets = {
 const counters = { BTC: 0, ETH: 0, SOL: 0, CARD: 0, "USDT ERC20": 0, "USDT TRC20": 0 };
 const sessions = {};
 
-// (Garde tes routes /api/check-code et /api/payment/init telles quelles)
-
 app.get("/", (req, res) => res.json({ success: true, message: "Backend Online" }));
+
+// ROUTE STATUS POUR LE FRONTEND (AJOUTÉ)
+app.get("/api/payment/status/:sessionId/:method", (req, res) => {
+    const { sessionId, method } = req.params;
+    const session = sessions[sessionId];
+
+    if (!session || !session.methods[method]) {
+        return res.json({ status: "not_found" });
+    }
+
+    const pay = session.methods[method];
+
+    // On renvoie l'état au client
+    res.json({
+        status: pay.paid ? (pay.usdt_sent ? "completed" : "detected") : "waiting",
+        wallet: pay.wallet, // Pour afficher l'adresse de réception au client
+        tx_payment: pay.tx_signature || null,
+        tx_delivery: pay.usdt_tx_signature || null
+    });
+});
 
 app.post("/api/check-code", (req, res) => {
   const { code } = req.body;
@@ -45,7 +61,7 @@ app.post("/api/payment/init", (req, res) => {
   if (!pack || !wallet || !payment_method) return res.status(400).json({ success: false });
 
   const list = wallets[payment_method];
-  let discountPercent = 0, parrainName = null, parrainTelegramId = null;
+  let discountPercent = 0;
 
   if (referral) {
     try {
@@ -53,13 +69,10 @@ app.post("/api/payment/init", (req, res) => {
       const codeData = promoCodes[referral];
       if (codeData) {
         discountPercent = codeData.discount || 0;
-        parrainName = codeData.parrain;
-        parrainTelegramId = codeData.telegram_id;
       }
     } catch (e) {}
   }
 
-  const usd = Number(pack.split('|')[0]);
   const baseToken = Number(pack.split('|')[1]);
   const bonus = Math.floor(baseToken * discountPercent / 100);
   
@@ -71,21 +84,27 @@ app.post("/api/payment/init", (req, res) => {
   const expiresAt = Date.now() + (payment_method === "CARD" ? 90 : 45) * 60000;
 
   sessions[sessionId].methods[payment_method] = {
-    address, wallet, pack, expires_at: expiresAt, referral, 
-    discount_percent: discountPercent, parrain_name: parrainName, 
-    parrain_telegram_id: parrainTelegramId, paid: false
+    address, 
+    wallet, 
+    pack, 
+    expires_at: expiresAt, 
+    referral, 
+    discount_percent: discountPercent,
+    paid: false,
+    usdt_sent: false // Flag pour l'envoi
   };
 
   res.json({
-    success: true, session_id: sessionId, unique_payment_address: address,
-    pack, discount_percent: discountPercent, bonus_tokens: bonus, 
-    total_tokens: baseToken + bonus, expires_at: expiresAt
+    success: true, 
+    session_id: sessionId, 
+    unique_payment_address: address,
+    pack, 
+    total_tokens: baseToken + bonus, 
+    expires_at: expiresAt
   });
 });
 
-// SURVEILLANCE
 setInterval(() => {
-  console.log(`[${new Date().toLocaleTimeString()}] 🔍 Scan des sessions: ${Object.keys(sessions).length} actives`);
   checkPendingPayments(sessions);
 }, 30000);
 
