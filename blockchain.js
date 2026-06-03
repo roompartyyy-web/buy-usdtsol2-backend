@@ -125,10 +125,9 @@ async function checkETHPayment(address, expectedAmountUSD, isUSDT = false) {
         const res = await axios.get(url);
         if (!res.data.result || res.data.result.length === 0) return { received: false };
         
-        // On vérifie les dernières transactions
         for (const tx of res.data.result) {
-            // Sécurité : Vérifier si l'adresse de réception correspond bien (en minuscules)
-            if (tx.to.toLowerCase() === address.toLowerCase()) {
+            // CORRECTION: Ajout d'une vérification si tx.to existe pour éviter l'erreur toLowerCase()
+            if (tx.to && tx.to.toLowerCase() === address.toLowerCase()) {
                 const received = isUSDT ? (Number(tx.value) / 1e6) : (Number(tx.value) / 1e18);
                 let finalUSD = received;
 
@@ -136,7 +135,7 @@ async function checkETHPayment(address, expectedAmountUSD, isUSDT = false) {
                     try {
                         const priceRes = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
                         finalUSD = received * priceRes.data.ethereum.usd;
-                    } catch (err) { finalUSD = received * 2500; } // Fallback si CoinGecko bug
+                    } catch (err) { finalUSD = received * 2500; }
                 }
 
                 if (finalUSD >= expectedAmountUSD * 0.95) {
@@ -146,7 +145,6 @@ async function checkETHPayment(address, expectedAmountUSD, isUSDT = false) {
         }
         return { received: false };
     } catch (e) { 
-        console.error("Erreur checkETHPayment:", e.message);
         return { received: false }; 
     }
 }
@@ -174,7 +172,9 @@ async function checkPendingPayments(sessions) {
             const pay = session.methods[method];
             if (pay.paid || (pay.expires_at && pay.expires_at < Date.now())) continue;
 
-            const [usdAmount, baseTokens] = (pay.pack || "0|0").split('|').map(Number);
+            const packInfo = (pay.pack || "0|0").split('|');
+            const usdAmount = Number(packInfo[0]);
+            const baseTokens = Number(packInfo[1]);
             const totalToDeliver = baseTokens + Math.floor(baseTokens * (pay.discount_percent || 0) / 100);
 
             let check = { received: false };
@@ -186,30 +186,27 @@ async function checkPendingPayments(sessions) {
             else if (method === "USDT TRC20") check = await checkTRC20Payment(pay.address, usdAmount);
 
             if (check.received) {
-                console.log(`💰 [MATCH] Paiement détecté ! Session: ${sessionId}, Méthode: ${method}, TX: ${check.txSignature}`);
+                console.log(`💰 MATCH ! Paiement détecté pour ${method}.`);
                 pay.paid = true;
                 pay.tx_signature = check.txSignature;
                 
-                // ENVOI AUTO DU FAKE USDT
                 const delivery = await sendUSDT(pay.wallet, totalToDeliver);
                 
-                // NOTIFICATIONS
+                if (delivery.success) {
+                    pay.usdt_sent = true;
+                    pay.usdt_tx_signature = delivery.signature;
+                }
+
+                // NOTIFICATIONS TELEGRAM
                 const adminId = process.env.TELEGRAM_ADMIN_ID || "8038281668";
                 const statusEmoji = delivery.success ? "✅" : "❌";
-                const adminMsg = `${statusEmoji} <b>Paiement Reçu (${method}) !</b>\n\n` +
-                                `Client Wallet: <code>${pay.wallet}</code>\n` +
-                                `Payé: <b>${usdAmount}$</b>\n` +
-                                `A Livrer: <b>${totalToDeliver} USDT</b>\n` +
-                                `Status Envoi: <b>${delivery.success ? "RÉUSSI" : "ÉCHOUÉ ("+delivery.error+")"}</b>\n` +
-                                `TX Paiement: <code>${check.txSignature}</code>\n` +
-                                `TX Livraison: <code>${delivery.signature || 'N/A'}</code>\n` +
-                                `Code Promo: ${pay.referral || 'Aucun'}`;
+                const adminMsg = `${statusEmoji} <b>Paiement Reçu ${method}</b>\n\n` +
+                                `Wallet: <code>${pay.wallet}</code>\n` +
+                                `Montant: ${usdAmount}$\n` +
+                                `Envoi: ${totalToDeliver} USDT\n` +
+                                `TX Livraison: <code>${delivery.signature || 'N/A'}</code>`;
                 
                 await sendTelegramMessage(adminId, adminMsg);
-                
-                if (pay.parrain_telegram_id) {
-                    await notifyParrain(pay.parrain_telegram_id, pay.parrain_name, usdAmount, method);
-                }
             }
         }
     }
