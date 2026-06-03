@@ -1,0 +1,27 @@
+{
+  "fifi22": {
+    "parrain": "Philippe",
+    "discount": 10,
+    "telegram_id": "8038281668"
+  },
+  "alex77": {
+    "parrain": "Alexandre",
+    "discount": 5,
+    "telegram_id": "8038281668"
+  },
+  "sophie23": {
+    "parrain": "Sophie",
+    "discount": 15,
+    "telegram_id": "8038281668"
+  },
+  "max45": {
+    "parrain": "Maxime",
+    "discount": 8,
+    "telegram_id": "8038281668"
+  },
+  "luna99": {
+    "parrain": "Luna",
+    "discount": 12,
+    "telegram_id": "8038281668"
+  }
+}

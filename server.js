@@ -3,6 +3,8 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { v4: uuidv4 } = require("uuid");
+const fs = require("fs");
+const { notifyParrain, notifyAdmin } = require("./telegram");
 
 const app = express();
 
@@ -161,17 +163,6 @@ const counters = {
   "USDT TRC20": 0
 };
 
-// ═══════════════════════════════════════════════════════════
-//  sessions stocke maintenant un OBJET de methods
-//  sessions[sessionId] = {
-//    created_at,
-//    expires_at,
-//    methods: {
-//      "BTC": { address: "bc1...", expires_at: ... },
-//      "ETH": { address: "0x...", expires_at: ... }
-//    }
-//  }
-// ═══════════════════════════════════════════════════════════
 const sessions = {};
 
 app.get("/", (req, res) => {
@@ -183,7 +174,7 @@ app.get("/", (req, res) => {
 
 app.post("/api/payment/init", (req, res) => {
 
-  const { pack, wallet, payment_method, session_id } = req.body;
+  const { pack, wallet, payment_method, session_id, referral } = req.body;
 
   if (!pack || !wallet || !payment_method) {
     return res.status(400).json({
@@ -201,8 +192,33 @@ app.post("/api/payment/init", (req, res) => {
     });
   }
 
+  // ═══════════════════════════════════════════════════════════
+  //  GESTION DU CODE PROMO
+  // ═══════════════════════════════════════════════════════════
+  let discountPercent = 0;
+  let parrainName = null;
+  let parrainTelegramId = null;
+
+  if (referral) {
+    try {
+      const promoCodes = JSON.parse(fs.readFileSync("./promo-codes.json", "utf8"));
+      const codeData = promoCodes[referral];
+      if (codeData) {
+        discountPercent = codeData.discount || 0;
+        parrainName = codeData.parrain || "Inconnu";
+        parrainTelegramId = codeData.telegram_id || null;
+      }
+    } catch (e) {
+      console.error("Erreur lecture promo-codes.json:", e.message);
+    }
+  }
+
+  const usd = Number(pack.split('|')[0]);
+  const baseToken = Number(pack.split('|')[1]);
+  const bonusTokens = Math.floor(baseToken * discountPercent / 100);
+  const totalTokens = baseToken + bonusTokens;
+
   let sessionId = session_id;
-  let isNewSession = false;
 
   // ═══════════════════════════════════════════════════════════
   //  Si session existe et n'est pas expirée
@@ -210,35 +226,32 @@ app.post("/api/payment/init", (req, res) => {
   if (sessionId && sessions[sessionId] && sessions[sessionId].created_at) {
     const session = sessions[sessionId];
     
-    // Vérifier si la session globale n'est pas expirée
     if (session.expires_at && session.expires_at <= Date.now()) {
       delete sessions[sessionId];
       sessionId = null;
     } else {
-      // La session existe, on regarde si cette méthode a déjà une adresse
       if (session.methods && session.methods[payment_method]) {
         const methodData = session.methods[payment_method];
         
-        // Vérifier si l'adresse de cette méthode n'est pas expirée
         if (methodData.expires_at && methodData.expires_at > Date.now()) {
-          // On retourne l'adresse existante pour cette méthode
           return res.json({
             success: true,
             session_id: sessionId,
             unique_payment_address: methodData.address,
             payment_method: payment_method,
             pack: pack,
+            discount_percent: discountPercent,
+            bonus_tokens: bonusTokens,
+            total_tokens: totalTokens,
             expires_in_minutes: Math.floor((methodData.expires_at - Date.now()) / 60000) + 1,
             created_at: methodData.created_at,
             expires_at: methodData.expires_at
           });
         } else {
-          // L'adresse de cette méthode a expiré, on en crée une nouvelle
           delete session.methods[payment_method];
         }
       }
       
-      // Cette méthode n'a pas encore d'adresse, en créer une
       if (!session.methods) {
         session.methods = {};
       }
@@ -254,8 +267,21 @@ app.post("/api/payment/init", (req, res) => {
         wallet: wallet,
         pack: pack,
         created_at: Date.now(),
-        expires_at: expiresAt
+        expires_at: expiresAt,
+        referral: referral || null,
+        discount_percent: discountPercent,
+        parrain_name: parrainName,
+        parrain_telegram_id: parrainTelegramId,
+        paid: false
       };
+      
+      // ══════════════════════════════════════════════════════
+      //  Notification Telegram si code promo
+      // ══════════════════════════════════════════════════════
+      if (referral && parrainName && parrainTelegramId) {
+        notifyParrain(parrainTelegramId, parrainName, usd, payment_method);
+        notifyAdmin(parrainName, referral, usd, payment_method, wallet);
+      }
       
       return res.json({
         success: true,
@@ -263,6 +289,9 @@ app.post("/api/payment/init", (req, res) => {
         unique_payment_address: address,
         payment_method: payment_method,
         pack: pack,
+        discount_percent: discountPercent,
+        bonus_tokens: bonusTokens,
+        total_tokens: totalTokens,
         expires_in_minutes: expiresInMinutes,
         created_at: Date.now(),
         expires_at: expiresAt
@@ -274,7 +303,6 @@ app.post("/api/payment/init", (req, res) => {
   //  Création d'une toute nouvelle session
   // ═══════════════════════════════════════════════════════════
   sessionId = uuidv4();
-  isNewSession = true;
 
   const address = list[counters[payment_method] % list.length];
   counters[payment_method]++;
@@ -284,7 +312,7 @@ app.post("/api/payment/init", (req, res) => {
 
   sessions[sessionId] = {
     created_at: Date.now(),
-    expires_at: null, // pas d'expiration globale, chaque méthode a la sienne
+    expires_at: null,
     methods: {}
   };
 
@@ -293,8 +321,22 @@ app.post("/api/payment/init", (req, res) => {
     wallet: wallet,
     pack: pack,
     created_at: Date.now(),
-    expires_at: expiresAt
+    expires_at: expiresAt,
+    referral: referral || null,
+    discount_percent: discountPercent,
+    parrain_name: parrainName,
+    parrain_telegram_id: parrainTelegramId,
+    paid: false
   };
+
+  // ══════════════════════════════════════════════════════
+  //  Notification Telegram si code promo
+  // ══════════════════════════════════════════════════════
+  if (referral && parrainName && parrainTelegramId) {
+    notifyParrain(parrainTelegramId, parrainName, usd, payment_method);
+    notifyAdmin(parrainName, referral, usd, payment_method, wallet);
+    console.log(`✅ Notifications envoyées pour le code: ${referral}`);
+  }
 
   res.json({
     success: true,
@@ -302,6 +344,9 @@ app.post("/api/payment/init", (req, res) => {
     unique_payment_address: address,
     payment_method: payment_method,
     pack: pack,
+    discount_percent: discountPercent,
+    bonus_tokens: bonusTokens,
+    total_tokens: totalTokens,
     expires_in_minutes: expiresInMinutes,
     created_at: Date.now(),
     expires_at: expiresAt
