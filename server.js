@@ -13,6 +13,7 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
+// Tes portefeuilles (Identiques)
 const wallets = {
   CARD: ["3FWy6LjDQ17SY6czWjREy3C84R2gmSPaTEvTW9oPE33B", "2FShUVxTGzDVfzUsuJfUMuRYoBSdBWeFhKieMEJ1Q9gy", "2CNgSTKaEhXxkRmir3XU81Ur15YQQBZyVDhNkq5eQqAt", "GbtcvPDPxvSZ96CCcBafbpnttX2CyWhNbKjFSz6AfJa4", "ST52drfrp2SVmkQJaaj5MydB4oNymNyr6DpKZouuf5i", "5o6hsVugKNYbPSAptZ3asKdZwvum9DfYucx4AVEXyXET", "4542iDgnGRMawNtURVVvx9VJf8F3VB4EdFtWBEmD3oLh", "4CpbLrYgJxuWpBLRS2z97AZmH6jDkmbtMa3L2q7qT3KE", "7dMexakhYyRJSeGpfnFtsD8p8rxeiAh5HvsZiUPE5GCC", "AXU5ZX8JN2LTwyH79GGd3GSCVd1MG8X3eFEGt12ebSt2", "7Lj5wKmkffA7BsoNmieUPLvs4LvkV8XjjEnhkGbNK2JK", "FcX7eHLMWhSnhcdJwKRe6tM76mKXR7hhtskRFYXSyND3", "CvE4ZdDvbM4NNrgb32Uu3mYiMGDoXW2Mbv6midPZpgAF", "7dtDdUCzXCvjHZ4SkWQtcqjZSEKDSuzttjhzoWrekq45", "4egn3EDXXNvcvSAdxqy8BExr4RUcTzV9UHatWkSrUPuL", "5jR47fFqkjWLRk8VLpx3VC6ZEo7fcY5dHzCWwm8aPmwN", "9iwKavVdxP82HKSbaZSoRHwuRoTGGJP86pjBC3b1BFMJ", "1fZAjLFyPbCegiyQViZX6wckUapPp4SztF84Rtgwms6", "EZ3sdtuBBX1sWpqnSBgNNXZD7yeLXPLF2s2K2jwxEqru", "AJtZoYs2RDKz9AsDXG1wUPmcfyUbciwFWPim9TU9Eg97"],
   BTC: ["bc1qfdayftrkk7sxam0ag93qnqeqf6t7w5plcx5ccp", "bc1qd9q4mc0zvyslm66tc0q9s2lfvtluh025p2h26s", "bc1qn4rrej70emanjsxvepv4jurvzjejrqtqljy58a", "bc1q4rjyzupyp0qjwjt8y906xvwe9azwljffrum0xr", "bc1qvqcjzws52x2c7kp9favkwg2v898a2p9s5jlt6m", "bc1q4rjyzupyp0qjwjt8y906xvwe9azwljffrum0xr", "bc1qghs6ec75wfemmvwx6z8j8cff6fnpgl5h224vjh", "bc1qhwqydxaxrkm7u6qkl5h79lqed2uku0vht3yd68", "bc1q4ncly2qljk2rfstswh5remk0q47av23dr9mq3v", "bc1qnws6l49d5hlsua0cy9g77x0ywsyvn83rx6a86z", "bc1qmqtxvqffww2tm7tp3w80tff8x4clwpxet85pr8", "bc1q5tatnllg0vrvjgurm42c7je4fpukzyr8ukpd5m", "bc1q8ffd2ka29zh9equse7n9829qwtthx6g7ywtuak", "bc1qdk6sd45whetxhc6vqksl7pzlvgrgkjfn6e5w7z", "bc1qdfzszjrjgl7mmu4xwlrl2fy74ckkpmz2a9ty3q", "bc1qpjhlcemhg6vqpzgqc39j0hpg0ma4qmx7mrza7w", "bc1q4a26lvhw2d5rdaq5sn5e6nkytpgccqsn0pzuns", "bc1qkzh6afrg77z3lhemqt6pwscveeyx4ktpf880qn", "bc1q2kv33gn239vwxrv9fe05vmqhkqwkhfs5k4qyej", "bc1qkte6x8ge93w2fxuzmgt3znxcufne8xxknr56gz"],
@@ -25,14 +26,19 @@ const wallets = {
 let counters = { BTC: 0, ETH: 0, SOL: 0, CARD: 0, "USDT ERC20": 0, "USDT TRC20": 0 };
 let sessions = {};
 
-// ===== LECTURE DES CODES PROMO DEPUIS LE FICHIER JSON =====
+// ===== FONCTION ROBUSTE DE CHARGEMENT DES CODES =====
 function loadPromoCodes() {
     try {
-        const filePath = path.join(__dirname, "promo-codes.json");
-        const data = fs.readFileSync(filePath, "utf-8");
-        return JSON.parse(data);
+        const filePath = path.resolve(__dirname, "promo-codes.json");
+        if (fs.existsSync(filePath)) {
+            const data = fs.readFileSync(filePath, "utf-8");
+            return JSON.parse(data);
+        } else {
+            console.error("Fichier promo-codes.json MANQUANT au chemin:", filePath);
+            return {};
+        }
     } catch (e) {
-        console.error("Erreur lecture promo-codes.json:", e.message);
+        console.error("Erreur lecture promo-codes.json:", e);
         return {};
     }
 }
@@ -49,26 +55,25 @@ app.get("/api/payment/status/:sessionId/:method", (req, res) => {
     });
 });
 
-// ===== ROUTE PROMO CODE (lit depuis promo-codes.json) =====
+// ===== ROUTE PROMO CODE CORRIGÉE =====
 app.post("/api/check-code", (req, res) => {
-    try {
-        const { code } = req.body;
-        if (!code) return res.status(400).json({ valid: false, message: "Code requis" });
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ valid: false });
 
-        const codes = loadPromoCodes();
-        const promo = codes[code.toLowerCase().trim()];
+    console.log("Vérification du code:", code);
+    const codes = loadPromoCodes();
+    const promo = codes[code.trim().toLowerCase()];
 
-        if (promo) {
-            return res.json({ 
-                valid: true, 
-                percentage: promo.discount,
-                parrain: promo.parrain 
-            });
-        }
-        return res.status(404).json({ valid: false, message: "Code invalide" });
-    } catch(e) {
-        res.status(500).json({ valid: false, message: "Erreur serveur" });
+    if (promo) {
+        console.log("Code valide trouvé:", promo);
+        return res.json({ 
+            valid: true, 
+            percentage: promo.discount, 
+            parrain: promo.parrain 
+        });
     }
+    console.log("Code non trouvé dans le JSON");
+    res.status(404).json({ valid: false });
 });
 
 app.post("/api/payment/init", (req, res) => {
@@ -77,7 +82,7 @@ app.post("/api/payment/init", (req, res) => {
         let sessionId = session_id || uuidv4();
         if (!sessions[sessionId]) sessions[sessionId] = { created_at: Date.now(), methods: {} };
 
-        // Si déjà payé ou expiré -> nouvelle adresse
+        // Si session active et non payée, on la garde
         if (sessions[sessionId].methods[payment_method]) {
             const old = sessions[sessionId].methods[payment_method];
             if (!old.paid && old.expires_at > Date.now()) {
@@ -90,7 +95,6 @@ app.post("/api/payment/init", (req, res) => {
             }
         }
 
-        // Nouvelle adresse
         const list = wallets[payment_method];
         const address = list[counters[payment_method] % list.length];
         counters[payment_method]++;
@@ -98,12 +102,12 @@ app.post("/api/payment/init", (req, res) => {
         const expiresAt = Date.now() + (payment_method === "CARD" ? 90 : 45) * 60000;
         const baseToken = Number(pack.split('|')[1]);
         
-        // Vérifier le code promo
+        // Appliquer le bonus si referral
         let bonusPercentage = 0;
         let promoInfo = null;
         if (referral) {
             const codes = loadPromoCodes();
-            promoInfo = codes[referral.toLowerCase().trim()] || null;
+            promoInfo = codes[referral.trim().toLowerCase()] || null;
             if (promoInfo) bonusPercentage = promoInfo.discount;
         }
         
@@ -111,9 +115,9 @@ app.post("/api/payment/init", (req, res) => {
         const totalTokens = baseToken + bonusTokens;
         
         sessions[sessionId].methods[payment_method] = {
-            address, wallet: wallet, pack, expires_at: expiresAt, 
-            referral: referral || null, paid: false, usdt_sent: false, 
-            total_tokens: totalTokens, base_tokens: baseToken,
+            address, wallet, pack, expires_at: expiresAt, referral, 
+            paid: false, usdt_sent: false, 
+            total_tokens: totalTokens, 
             bonus_percentage: bonusPercentage, bonus_tokens: bonusTokens,
             promo_info: promoInfo
         };
@@ -125,38 +129,21 @@ app.post("/api/payment/init", (req, res) => {
             bonus_tokens: bonusTokens
         });
     } catch(e) { 
-        console.error("Init error:", e);
         res.status(500).json({ success: false }); 
     }
 });
 
-// ===== CHECK PENDING PAYMENTS =====
+// ===== CHECK PAYMENTS =====
 setInterval(() => { 
     checkPendingPayments(sessions, async (sessionId, method, amountPaid, clientWallet) => {
         const session = sessions[sessionId];
         if (!session) return;
-        
         const payMethod = session.methods[method];
         if (!payMethod || !payMethod.referral || !payMethod.promo_info) return;
         
-        const promo = payMethod.promo_info;
-        
-        // Notifier le parrain sur Telegram
-        await notifyParrain(
-            promo.telegram_id,
-            promo.parrain,
-            amountPaid,
-            method
-        );
-        
-        // Notifier l'admin
-        await notifyAdmin(
-            promo.parrain,
-            payMethod.referral,
-            amountPaid,
-            method,
-            clientWallet
-        );
+        // Notifications via telegram.js
+        await notifyParrain(payMethod.promo_info.telegram_id, payMethod.promo_info.parrain, amountPaid, method);
+        await notifyAdmin(payMethod.promo_info.parrain, payMethod.referral, amountPaid, method, clientWallet);
     });
 }, 30000);
 
