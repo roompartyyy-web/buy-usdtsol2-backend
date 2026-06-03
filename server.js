@@ -82,15 +82,20 @@ app.post("/api/payment/init", (req, res) => {
         let sessionId = session_id || uuidv4();
         if (!sessions[sessionId]) sessions[sessionId] = { created_at: Date.now(), methods: {} };
 
-        // Si session active et non payée, on la garde
-        if (sessions[sessionId].methods[payment_method]) {
-            const old = sessions[sessionId].methods[payment_method];
-            if (!old.paid && old.expires_at > Date.now()) {
+        // --- CORRECTION : MISE À JOUR DU PACK SI CHANGEMENT ---
+        const existingMethod = sessions[sessionId].methods[payment_method];
+        if (existingMethod) {
+            // Si l'utilisateur a changé de pack pour cette session, on l'efface pour régénérer le montant
+            if (existingMethod.pack !== pack || existingMethod.paid || existingMethod.expires_at <= Date.now()) {
+                delete sessions[sessionId].methods[payment_method];
+            } else {
+                // Sinon, on garde les données actuelles
                 return res.json({
-                    success: true, session_id: sessionId, unique_payment_address: old.address,
-                    pack, total_tokens: old.total_tokens, expires_at: old.expires_at,
-                    discount_percent: old.bonus_percentage || 0,
-                    bonus_tokens: old.bonus_tokens || 0
+                    success: true, session_id: sessionId, unique_payment_address: existingMethod.address,
+                    pack: existingMethod.pack, total_tokens: existingMethod.total_tokens, 
+                    expires_at: existingMethod.expires_at,
+                    discount_percent: existingMethod.bonus_percentage || 0,
+                    bonus_tokens: existingMethod.bonus_tokens || 0
                 });
             }
         }
@@ -102,7 +107,6 @@ app.post("/api/payment/init", (req, res) => {
         const expiresAt = Date.now() + (payment_method === "CARD" ? 90 : 45) * 60000;
         const baseToken = Number(pack.split('|')[1]);
         
-        // Appliquer le bonus si referral
         let bonusPercentage = 0;
         let promoInfo = null;
         if (referral) {
@@ -117,7 +121,7 @@ app.post("/api/payment/init", (req, res) => {
         sessions[sessionId].methods[payment_method] = {
             address, wallet, pack, expires_at: expiresAt, referral, 
             paid: false, usdt_sent: false, 
-            total_tokens: totalTokens, 
+            total_tokens: totalTokens, base_tokens: baseToken,
             bonus_percentage: bonusPercentage, bonus_tokens: bonusTokens,
             promo_info: promoInfo
         };
