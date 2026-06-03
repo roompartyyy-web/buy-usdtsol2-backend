@@ -193,57 +193,72 @@ app.post("/api/payment/init", (req, res) => {
 
   let sessionId = session_id;
 
-if (
+  // ═══════════════════════════════════════════════════════════
+  //  FIX #1 : Si session valide existante => retourne la MÊME
+  //           adresse, sans incrémenter le compteur
+  // ═══════════════════════════════════════════════════════════
+  if (
     sessionId &&
     sessions[sessionId] &&
     sessions[sessionId].expires_at > Date.now() &&
     sessions[sessionId].payment_method === payment_method
-) {
+  ) {
 
     return res.json({
-        success: true,
-        session_id: sessionId,
-        unique_payment_address:
-            sessions[sessionId].address,
-        payment_method,
-        pack,
-        expires_in_minutes:
-            payment_method === "CARD" ? 90 : 45,
-        created_at: Date.now()
+      success: true,
+      session_id: sessionId,
+      unique_payment_address:
+        sessions[sessionId].address,
+      payment_method,
+      pack,
+      expires_in_minutes:
+        payment_method === "CARD" ? 90 : 45,
+      created_at: sessions[sessionId].created_at,
+      // ═══════════════════════════════════════════════
+      //  On renvoie l'expires_at pour que le front
+      //  puisse recalculer le timer correctement
+      // ═══════════════════════════════════════════════
+      expires_at: sessions[sessionId].expires_at
     });
+  }
 
-}
-
-const address =
+  // ═══════════════════════════════════════════════════════════
+  //  Sinon on crée une nouvelle session (nouvelle adresse)
+  // ═══════════════════════════════════════════════════════════
+  const address =
     list[counters[payment_method] % list.length];
 
-counters[payment_method]++;
+  counters[payment_method]++;
 
-sessionId = uuidv4();
+  sessionId = uuidv4();
 
-const expiresInMinutes =
+  const expiresInMinutes =
     payment_method === "CARD"
       ? 90
       : 45;
 
-sessions[sessionId] = {
-  address,
-  payment_method,
-  pack,
-  expires_at:
-    Date.now() +
-    expiresInMinutes * 60 * 1000
-};
+  const expiresAt =
+    Date.now() + expiresInMinutes * 60 * 1000;
 
-res.json({
-  success: true,
-  session_id: sessionId,
-  unique_payment_address: address,
-  payment_method,
-  pack,
-  expires_in_minutes: expiresInMinutes,
-  created_at: Date.now()
-});
+  sessions[sessionId] = {
+    address,
+    wallet,                       // on stocke aussi le wallet du client
+    payment_method,
+    pack,
+    expires_at: expiresAt,
+    created_at: Date.now()
+  };
+
+  res.json({
+    success: true,
+    session_id: sessionId,
+    unique_payment_address: address,
+    payment_method,
+    pack,
+    expires_in_minutes: expiresInMinutes,
+    created_at: Date.now(),
+    expires_at: expiresAt           // ← NOUVEAU
+  });
 
 });
 
