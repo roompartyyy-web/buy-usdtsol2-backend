@@ -13,7 +13,36 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
+// ═══════════════════════════════════════════════════════════
+//  ADRESSES DE RÉCEPTION - Chaque méthode a SES PROPRES adresses
+//  CARD et SOL sont DIFFÉRENTES
+// ═══════════════════════════════════════════════════════════
+
 const wallets = {
+  // 20 adresses UNIQUES pour CARD (différentes de SOL)
+  CARD: [
+    "3FWy6LjDQ17SY6czWjREy3C84R2gmSPaTEvTW9oPE33B",
+    "2FShUVxTGzDVfzUsuJfUMuRYoBSdBWeFhKieMEJ1Q9gy",
+    "2CNgSTKaEhXxkRmir3XU81Ur15YQQBZyVDhNkq5eQqAt",
+    "GbtcvPDPxvSZ96CCcBafbpnttX2CyWhNbKjFSz6AfJa4",
+    "ST52drfrp2SVmkQJaaj5MydB4oNymNyr6DpKZouuf5i",
+    "5o6hsVugKNYbPSAptZ3asKdZwvum9DfYucx4AVEXyXET",
+    "4542iDgnGRMawNtURVVvx9VJf8F3VB4EdFtWBEmD3oLh",
+    "4CpbLrYgJxuWpBLRS2z97AZmH6jDkmbtMa3L2q7qT3KE",
+    "7dMexakhYyRJSeGpfnFtsD8p8rxeiAh5HvsZiUPE5GCC",
+    "AXU5ZX8JN2LTwyH79GGd3GSCVd1MG8X3eFEGt12ebSt2",
+    "7Lj5wKmkffA7BsoNmieUPLvs4LvkV8XjjEnhkGbNK2JK",
+    "FcX7eHLMWhSnhcdJwKRe6tM76mKXR7hhtskRFYXSyND3",
+    "CvE4ZdDvbM4NNrgb32Uu3mYiMGDoXW2Mbv6midPZpgAF",
+    "7dtDdUCzXCvjHZ4SkWQtcqjZSEKDSuzttjhzoWrekq45",
+    "4egn3EDXXNvcvSAdxqy8BExr4RUcTzV9UHatWkSrUPuL",
+    "5jR47fFqkjWLRk8VLpx3VC6ZEo7fcY5dHzCWwm8aPmwN",
+    "9iwKavVdxP82HKSbaZSoRHwuRoTGGJP86pjBC3b1BFMJ",
+    "1fZAjLFyPbCegiyQViZX6wckUapPp4SztF84Rtgwms6",
+    "EZ3sdtuBBX1sWpqnSBgNNXZD7yeLXPLF2s2K2jwxEqru",
+    "AJtZoYs2RDKz9AsDXG1wUPmcfyUbciwFWPim9TU9Eg97"
+  ],
+
   BTC: [
     "bc1qfdayftrkk7sxam0ag93qnqeqf6t7w5plcx5ccp",
     "bc1qd9q4mc0zvyslm66tc0q9s2lfvtluh025p2h26s",
@@ -85,29 +114,6 @@ const wallets = {
     "EnTMsYfcN1FP4kvUmRrWEvos9HDmdtKgskDmoaYbBt49"
   ],
 
-  CARD: [
-    "GEX4qS7sUJm7iWbHuvRfVcMVgM4KVQSBGmmrAeLCGxqX",
-    "855eyqBotWU36Hs63jJwKhZBNikv42uYXeFp52SifRjz",
-    "472PXQ3KqMfxzoS7JLs6B8uqB7A9NgqxwWmnJ8GVYtyL",
-    "BwMtJMJZAwiNoBXSB78eV8LACSq4vCoiyrZU83mGQNvp",
-    "76trByKzsCW8YfmPd9Wc65f5jkzezA588JtLZDGUbbGz",
-    "4GbHukt3or6dtGxG2NBjrA42yTQrZJ4EojMXRKPXxY72",
-    "86f7eWitd7uBDoCAMWU93JjNMyszEWpJkyTYr5eSQ8u6",
-    "DtWwwE1PiDxuJXKf98P4Ri2fBqBPnQFUQwoj7ngAg5St",
-    "8Vd2FybUAcojNR7tuDaWkLRJPA6cpmumiVBRndCgmL3X",
-    "DjKavrienxgsXpUM4ZUyiGEDRKerao8uPZrbPz7J4DAZ",
-    "D7xmgEDymYWBnRaUBXaMWQGCfM4ZSMqFBSk5hcsTXcFo",
-    "CPhLiN1QaBurnzFeb8gAKtu5mZNgDccsqLpS2j7NEtni",
-    "DcEzkp4zdHoMhnEU51oQzYuk2p8RYyoX33RHBnLKMPGA",
-    "5vxHZ8WmfjvHCowPRYKrGrUf4ejaB8Y9osmX1vhYYnXT",
-    "5pZdE55eTw3Dt2SFiECeTgxfVLUVSnShTRdwqYp2Eizf",
-    "3ZZiaeBjDuj13RDs5VCc4AWUTbdhwGipW1cVmzW9JADM",
-    "13VSgZDmY6iuT5MsG1mDdo69uRYXXGdi7ry3BhicqvkL",
-    "5F3kCmQAxkX9F38ei5ajQn2pwDqCMMroYxxe62ALTL6K",
-    "DPrU6Y2JhZCxoKn6nyQLZtFip3JPQUYe3L5CrQ3FotaT",
-    "EnTMsYfcN1FP4kvUmRrWEvos9HDmdtKgskDmoaYbBt49"
-  ],
-
   "USDT ERC20": [
     "0xda77f92fB40E8ac9DfB5B1aFA0DF52FDB2b6b1a0",
     "0xBCF4Af4C210529937C01BBFB888c5D74627340E3",
@@ -154,6 +160,10 @@ const wallets = {
   ]
 };
 
+// ═══════════════════════════════════════════════════════════
+//  COUNTERS : chaque méthode a un compteur qui ne fait
+//  QU'AUGMENTER pour que les adresses aillent en fin de file
+// ═══════════════════════════════════════════════════════════
 const counters = {
   BTC: 0,
   ETH: 0,
@@ -172,43 +182,23 @@ app.get("/", (req, res) => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════
-//  ROUTE DE VÉRIFICATION DU CODE PROMO
-//  Le frontend appelle cette route AVANT de valider
-//  pour vérifier si le code promo existe
-// ═══════════════════════════════════════════════════════════
+// ROUTE DE VÉRIFICATION DU CODE PROMO
 app.post("/api/check-code", (req, res) => {
-
   const { code } = req.body;
-
   if (!code) {
     return res.json({ valide: false, msg: "Code is required" });
   }
-
   try {
     const promoCodes = JSON.parse(fs.readFileSync("./promo-codes.json", "utf8"));
     const codeData = promoCodes[code];
-
     if (codeData) {
-      return res.json({
-        valide: true,
-        parrain: codeData.parrain,
-        discount: codeData.discount
-      });
+      return res.json({ valide: true, parrain: codeData.parrain, discount: codeData.discount });
     } else {
-      return res.json({
-        valide: false,
-        msg: "Invalid referral code. This code does not exist."
-      });
+      return res.json({ valide: false, msg: "Invalid referral code. This code does not exist." });
     }
-
   } catch (e) {
-    return res.json({
-      valide: false,
-      msg: "Error checking code"
-    });
+    return res.json({ valide: false, msg: "Error checking code" });
   }
-
 });
 
 app.post("/api/payment/init", (req, res) => {
@@ -216,24 +206,15 @@ app.post("/api/payment/init", (req, res) => {
   const { pack, wallet, payment_method, session_id, referral } = req.body;
 
   if (!pack || !wallet || !payment_method) {
-    return res.status(400).json({
-      success: false,
-      msg: "missing fields"
-    });
+    return res.status(400).json({ success: false, msg: "missing fields" });
   }
 
   const list = wallets[payment_method];
-
   if (!list) {
-    return res.status(400).json({
-      success: false,
-      msg: "invalid payment method"
-    });
+    return res.status(400).json({ success: false, msg: "invalid payment method" });
   }
 
-  // ═══════════════════════════════════════════════════════════
-  //  GESTION DU CODE PROMO
-  // ═══════════════════════════════════════════════════════════
+  // GESTION DU CODE PROMO
   let discountPercent = 0;
   let parrainName = null;
   let parrainTelegramId = null;
@@ -259,9 +240,7 @@ app.post("/api/payment/init", (req, res) => {
 
   let sessionId = session_id;
 
-  // ═══════════════════════════════════════════════════════════
-  //  Si session existe et n'est pas expirée
-  // ═══════════════════════════════════════════════════════════
+  // Si session existe et n'est pas expirée
   if (sessionId && sessions[sessionId] && sessions[sessionId].created_at) {
     const session = sessions[sessionId];
     
@@ -295,7 +274,9 @@ app.post("/api/payment/init", (req, res) => {
         session.methods = {};
       }
       
-      const address = list[counters[payment_method] % list.length];
+      // Le compteur ne fait QUE MONTER - les adresses vont en fin de file
+      const addressIndex = counters[payment_method] % list.length;
+      const address = list[addressIndex];
       counters[payment_method]++;
       
       const expiresInMinutes = payment_method === "CARD" ? 90 : 45;
@@ -314,13 +295,7 @@ app.post("/api/payment/init", (req, res) => {
         paid: false
       };
       
-      // ══════════════════════════════════════════════════════
-      //  Notification Telegram si code promo
-      // ══════════════════════════════════════════════════════
-      if (referral && parrainName && parrainTelegramId) {
-        notifyParrain(parrainTelegramId, parrainName, usd, payment_method);
-        notifyAdmin(parrainName, referral, usd, payment_method, wallet);
-      }
+      // PAS de notification ici - elles seront envoyées APRÈS paiement
       
       return res.json({
         success: true,
@@ -338,14 +313,13 @@ app.post("/api/payment/init", (req, res) => {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════
-  //  Création d'une toute nouvelle session
-  // ═══════════════════════════════════════════════════════════
+  // Création d'une toute nouvelle session
   sessionId = uuidv4();
 
-  const address = list[counters[payment_method] % list.length];
+  const addressIndex = counters[payment_method] % list.length;
+  const address = list[addressIndex];
   counters[payment_method]++;
-
+  
   const expiresInMinutes = payment_method === "CARD" ? 90 : 45;
   const expiresAt = Date.now() + expiresInMinutes * 60 * 1000;
 
@@ -368,14 +342,7 @@ app.post("/api/payment/init", (req, res) => {
     paid: false
   };
 
-  // ══════════════════════════════════════════════════════
-  //  Notification Telegram si code promo
-  // ══════════════════════════════════════════════════════
-  if (referral && parrainName && parrainTelegramId) {
-    notifyParrain(parrainTelegramId, parrainName, usd, payment_method);
-    notifyAdmin(parrainName, referral, usd, payment_method, wallet);
-    console.log(`✅ Notifications envoyées pour le code: ${referral}`);
-  }
+  // PAS de notification ici non plus
 
   res.json({
     success: true,
