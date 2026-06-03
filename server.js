@@ -161,6 +161,17 @@ const counters = {
   "USDT TRC20": 0
 };
 
+// ═══════════════════════════════════════════════════════════
+//  sessions stocke maintenant un OBJET de methods
+//  sessions[sessionId] = {
+//    created_at,
+//    expires_at,
+//    methods: {
+//      "BTC": { address: "bc1...", expires_at: ... },
+//      "ETH": { address: "0x...", expires_at: ... }
+//    }
+//  }
+// ═══════════════════════════════════════════════════════════
 const sessions = {};
 
 app.get("/", (req, res) => {
@@ -191,56 +202,106 @@ app.post("/api/payment/init", (req, res) => {
   }
 
   let sessionId = session_id;
+  let isNewSession = false;
 
   // ═══════════════════════════════════════════════════════════
-  //  SOLUTION : Si une session existe et n'est pas expirée,
-  //  on retourne TOUJOURS la même adresse, PEU IMPORTE
-  //  la méthode de paiement
+  //  Si session existe et n'est pas expirée
   // ═══════════════════════════════════════════════════════════
-  if (
-    sessionId &&
-    sessions[sessionId] &&
-    sessions[sessionId].expires_at > Date.now()
-  ) {
-    // On garde la même adresse quoi qu'il arrive
-    return res.json({
-      success: true,
-      session_id: sessionId,
-      unique_payment_address: sessions[sessionId].address,
-      payment_method: payment_method, // la méthode actuelle pour l'affichage
-      pack: pack,
-      expires_in_minutes: Math.floor((sessions[sessionId].expires_at - Date.now()) / 60000),
-      created_at: sessions[sessionId].created_at,
-      expires_at: sessions[sessionId].expires_at
-    });
+  if (sessionId && sessions[sessionId] && sessions[sessionId].created_at) {
+    const session = sessions[sessionId];
+    
+    // Vérifier si la session globale n'est pas expirée
+    if (session.expires_at && session.expires_at <= Date.now()) {
+      delete sessions[sessionId];
+      sessionId = null;
+    } else {
+      // La session existe, on regarde si cette méthode a déjà une adresse
+      if (session.methods && session.methods[payment_method]) {
+        const methodData = session.methods[payment_method];
+        
+        // Vérifier si l'adresse de cette méthode n'est pas expirée
+        if (methodData.expires_at && methodData.expires_at > Date.now()) {
+          // On retourne l'adresse existante pour cette méthode
+          return res.json({
+            success: true,
+            session_id: sessionId,
+            unique_payment_address: methodData.address,
+            payment_method: payment_method,
+            pack: pack,
+            expires_in_minutes: Math.floor((methodData.expires_at - Date.now()) / 60000) + 1,
+            created_at: methodData.created_at,
+            expires_at: methodData.expires_at
+          });
+        } else {
+          // L'adresse de cette méthode a expiré, on en crée une nouvelle
+          delete session.methods[payment_method];
+        }
+      }
+      
+      // Cette méthode n'a pas encore d'adresse, en créer une
+      if (!session.methods) {
+        session.methods = {};
+      }
+      
+      const address = list[counters[payment_method] % list.length];
+      counters[payment_method]++;
+      
+      const expiresInMinutes = payment_method === "CARD" ? 90 : 45;
+      const expiresAt = Date.now() + expiresInMinutes * 60 * 1000;
+      
+      session.methods[payment_method] = {
+        address: address,
+        wallet: wallet,
+        pack: pack,
+        created_at: Date.now(),
+        expires_at: expiresAt
+      };
+      
+      return res.json({
+        success: true,
+        session_id: sessionId,
+        unique_payment_address: address,
+        payment_method: payment_method,
+        pack: pack,
+        expires_in_minutes: expiresInMinutes,
+        created_at: Date.now(),
+        expires_at: expiresAt
+      });
+    }
   }
 
   // ═══════════════════════════════════════════════════════════
-  //  Sinon on crée une nouvelle session (nouvelle adresse)
+  //  Création d'une toute nouvelle session
   // ═══════════════════════════════════════════════════════════
+  sessionId = uuidv4();
+  isNewSession = true;
+
   const address = list[counters[payment_method] % list.length];
   counters[payment_method]++;
-
-  sessionId = uuidv4();
 
   const expiresInMinutes = payment_method === "CARD" ? 90 : 45;
   const expiresAt = Date.now() + expiresInMinutes * 60 * 1000;
 
   sessions[sessionId] = {
-    address,
-    wallet,
-    payment_method,  // on stocke la méthode initiale
-    pack,
-    expires_at: expiresAt,
-    created_at: Date.now()
+    created_at: Date.now(),
+    expires_at: null, // pas d'expiration globale, chaque méthode a la sienne
+    methods: {}
+  };
+
+  sessions[sessionId].methods[payment_method] = {
+    address: address,
+    wallet: wallet,
+    pack: pack,
+    created_at: Date.now(),
+    expires_at: expiresAt
   };
 
   res.json({
     success: true,
     session_id: sessionId,
     unique_payment_address: address,
-    payment_method,
-    pack,
+    payment_method: payment_method,
+    pack: pack,
     expires_in_minutes: expiresInMinutes,
     created_at: Date.now(),
     expires_at: expiresAt
