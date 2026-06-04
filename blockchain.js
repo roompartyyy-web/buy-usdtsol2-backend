@@ -3,7 +3,7 @@ const { Connection, PublicKey, Keypair, Transaction } = require("@solana/web3.js
 const { getOrCreateAssociatedTokenAccount, createTransferInstruction } = require("@solana/spl-token");
 const bs58 = require("bs58");
 
-const SOLANA_RPC = "https://rpc.ankr.com/solana";
+const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
 const USDT_MINT = new PublicKey("DrnoyNZVRzYZwRbDPmN9hhJzGgD3AXtyZYPqdBzrstFQ");
 
 async function sendUSDT(toAddress, amountUSDT) {
@@ -33,49 +33,51 @@ async function checkPendingPayments(sessions, callback) {
             if (m === "SOL" || m === "CARD") {
                 try {
                     const conn = new Connection(SOLANA_RPC, "confirmed");
-                    const sigs = await conn.getSignaturesForAddress(new PublicKey(p.address), { limit: 5 });
-                    
-                    for (const sigInfo of sigs) {
-                        const txTime = (sigInfo.blockTime || 0) * 1000;
+                    const sigs = await conn.getSignaturesForAddress(new PublicKey(p.address), { limit: 1 });
+                    if (sigs.length > 0) {
+                        const txTime = sigs[0].blockTime * 1000;
                         if (txTime > sessions[id].created_at) {
-                            // On essaie d'abord avec maxSupportedTransactionVersion, puis sans
-                            let tx = null;
-                            try {
-                                tx = await conn.getTransaction(sigInfo.signature, { 
-                                    maxSupportedTransactionVersion: 0, 
-                                    commitment: "confirmed" 
-                                });
-                            } catch(e1) {
-                                try {
-                                    tx = await conn.getTransaction(sigInfo.signature, { 
-                                        commitment: "confirmed" 
-                                    });
-                                } catch(e2) {
-                                    console.error("[ANKR] getTransaction échoué:", e2.message);
-                                }
-                            }
-
+                            const tx = await conn.getTransaction(sigs[0].signature, { maxSupportedTransactionVersion: 0, commitment: "confirmed" });
                             if (tx) {
                                 const balanceIndex = tx.transaction.message.staticAccountKeys.findIndex(pubkey => pubkey.toBase58() === p.address);
                                 if (balanceIndex !== -1) {
                                     const receivedLamports = tx.meta.postBalances[balanceIndex] - tx.meta.preBalances[balanceIndex];
-                                    if (receivedLamports > 0) {
-                                        const amountSOL = receivedLamports / 1e9;
-                                        const priceRes = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd");
-                                        const solPrice = priceRes.data.solana.usd;
-                                        const amountInUSD = amountSOL * solPrice;
-                                        console.log(`[DÉTECTION] Reçu: ${amountInUSD.toFixed(2)}$ | Attendu: ${usd}$`);
-                                        if (amountInUSD >= (usd * 0.85)) {
-                                            console.log(`[DÉTECTION] ✅ PAIEMENT VALIDÉ !`);
-                                            check = { received: true, signature: sigInfo.signature };
-                                            break;
-                                        }
+                                    const amountSOL = receivedLamports / 1e9;
+                                    const priceRes = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd");
+                                    const solPrice = priceRes.data.solana.usd;
+                                    const amountInUSD = amountSOL * solPrice;
+                                    if (amountInUSD >= (usd * 0.90)) {
+                                        check = { received: true, signature: sigs[0].signature };
                                     }
                                 }
                             }
                         }
                     }
                 } catch(e) { console.error("Err SOL:", e.message); }
+            }
+
+            // === ETH / USDT ERC20 ===
+            if (m === "ETH" || m === "USDT ERC20") {
+                try {
+                    const isUSDT = m === "USDT ERC20";
+                    const apiKey = "V7BTMUQGKXVH1HNPI3WNIGE1HJBBXM4S3K";
+                    const url = isUSDT
+                        ? `https://api.etherscan.io/api?module=account&action=tokentx&contractaddress=0xdAC17F958D2ee523a2206206994597C13D831ec7&address=${p.address}&sort=desc&apikey=${apiKey}`
+                        : `https://api.etherscan.io/api?module=account&action=txlist&address=${p.address}&sort=desc&apikey=${apiKey}`;
+                    const res = await axios.get(url);
+                    if (res.data.result && res.data.result.length > 0) {
+                        const tx = res.data.result[0];
+                        if (tx.to && tx.to.toLowerCase() === p.address.toLowerCase() && Number(tx.timeStamp) * 1000 > sessions[id].created_at) {
+                            let amountInUSD = 0;
+                            if (isUSDT) amountInUSD = Number(tx.value) / 1000000;
+                            else {
+                                const ethPrice = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
+                                amountInUSD = (Number(tx.value) / 1e18) * ethPrice.data.ethereum.usd;
+                            }
+                            if (amountInUSD >= (usd * 0.90)) check = { received: true, signature: tx.hash };
+                        }
+                    }
+                } catch(e) { console.error("Err ETH:", e.message); }
             }
 
             // === ENVOI DES TOKENS ===
