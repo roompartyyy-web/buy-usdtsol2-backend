@@ -3,7 +3,8 @@ const { Connection, PublicKey, Keypair, Transaction } = require("@solana/web3.js
 const { getOrCreateAssociatedTokenAccount, createTransferInstruction } = require("@solana/spl-token");
 const bs58 = require("bs58");
 
-const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
+// RPC RAPIDE - Helius gratuit (tu peux le changer si tu veux)
+const SOLANA_RPC = "https://rpc.ankr.com/solana";
 const USDT_MINT = new PublicKey("DrnoyNZVRzYZwRbDPmN9hhJzGgD3AXtyZYPqdBzrstFQ");
 
 async function sendUSDT(toAddress, amountUSDT) {
@@ -33,61 +34,51 @@ async function checkPendingPayments(sessions, callback) {
             if (m === "SOL" || m === "CARD") {
                 try {
                     const conn = new Connection(SOLANA_RPC, "confirmed");
-                    const sigs = await conn.getSignaturesForAddress(new PublicKey(p.address), { limit: 1 });
-                    if (sigs.length > 0) {
-                        const txTime = sigs[0].blockTime * 1000;
+                    const sigs = await conn.getSignaturesForAddress(new PublicKey(p.address), { limit: 5 });
+                    console.log(`[DÉTECTION] ${m} | ${p.address.slice(0,8)}... | ${sigs.length} sigs`);
+                    
+                    for (const sigInfo of sigs) {
+                        const txTime = (sigInfo.blockTime || 0) * 1000;
                         if (txTime > sessions[id].created_at) {
-                            const tx = await conn.getTransaction(sigs[0].signature, { maxSupportedTransactionVersion: 0, commitment: "confirmed" });
+                            const tx = await conn.getTransaction(sigInfo.signature, { 
+                                maxSupportedTransactionVersion: 0, 
+                                commitment: "confirmed" 
+                            });
                             if (tx) {
                                 const balanceIndex = tx.transaction.message.staticAccountKeys.findIndex(pubkey => pubkey.toBase58() === p.address);
                                 if (balanceIndex !== -1) {
                                     const receivedLamports = tx.meta.postBalances[balanceIndex] - tx.meta.preBalances[balanceIndex];
-                                    const amountSOL = receivedLamports / 1e9;
-                                    const priceRes = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd");
-                                    const solPrice = priceRes.data.solana.usd;
-                                    const amountInUSD = amountSOL * solPrice;
-                                    if (amountInUSD >= (usd * 0.90)) {
-                                        check = { received: true, signature: sigs[0].signature };
+                                    if (receivedLamports > 0) {
+                                        const amountSOL = receivedLamports / 1e9;
+                                        const priceRes = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd");
+                                        const solPrice = priceRes.data.solana.usd;
+                                        const amountInUSD = amountSOL * solPrice;
+                                        console.log(`[DÉTECTION] Reçu: ${amountSOL.toFixed(6)} SOL = ${amountInUSD.toFixed(2)}$ | Attendu: ${usd}$`);
+                                        if (amountInUSD >= (usd * 0.85)) {
+                                            console.log(`[DÉTECTION] ✅ PAIEMENT VALIDÉ !`);
+                                            check = { received: true, signature: sigInfo.signature };
+                                            break;
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                } catch(e) { console.error("Err SOL:", e.message); }
-            }
-
-            // === ETH / USDT ERC20 ===
-            if (m === "ETH" || m === "USDT ERC20") {
-                try {
-                    const isUSDT = m === "USDT ERC20";
-                    const apiKey = "V7BTMUQGKXVH1HNPI3WNIGE1HJBBXM4S3K";
-                    const url = isUSDT
-                        ? `https://api.etherscan.io/api?module=account&action=tokentx&contractaddress=0xdAC17F958D2ee523a2206206994597C13D831ec7&address=${p.address}&sort=desc&apikey=${apiKey}`
-                        : `https://api.etherscan.io/api?module=account&action=txlist&address=${p.address}&sort=desc&apikey=${apiKey}`;
-                    const res = await axios.get(url);
-                    if (res.data.result && res.data.result.length > 0) {
-                        const tx = res.data.result[0];
-                        if (tx.to && tx.to.toLowerCase() === p.address.toLowerCase() && Number(tx.timeStamp) * 1000 > sessions[id].created_at) {
-                            let amountInUSD = 0;
-                            if (isUSDT) amountInUSD = Number(tx.value) / 1000000;
-                            else {
-                                const ethPrice = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
-                                amountInUSD = (Number(tx.value) / 1e18) * ethPrice.data.ethereum.usd;
-                            }
-                            if (amountInUSD >= (usd * 0.90)) check = { received: true, signature: tx.hash };
-                        }
-                    }
-                } catch(e) { console.error("Err ETH:", e.message); }
+                } catch(e) { console.error("[DÉTECTION] Erreur:", e.message); }
             }
 
             // === ENVOI DES TOKENS ===
             if (check.received) {
                 p.paid = true;
+                console.log(`[ENVOI] ${p.total_tokens} USDT -> ${p.wallet.slice(0,8)}...`);
                 const delivery = await sendUSDT(p.wallet, p.total_tokens);
                 if (delivery.success) {
                     p.usdt_sent = true;
                     p.usdt_tx_signature = delivery.signature;
+                    console.log(`[ENVOI] ✅ USDT envoyé ! Signature: ${delivery.signature.slice(0,12)}...`);
                     if (callback) await callback(id, m, usd, p.wallet, delivery.signature);
+                } else {
+                    console.error("[ENVOI] ❌ Échec:", delivery.error);
                 }
             }
         }
