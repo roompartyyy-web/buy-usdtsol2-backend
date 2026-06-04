@@ -121,6 +121,6 @@ setInterval(() => {
             txSignature
         );
     });
-}, 15000); // Vérifie toutes les 15 SECONDES au lieu de 30
+}, 5000); // Vérifie toutes les 15 SECONDES au lieu de 30
 
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
