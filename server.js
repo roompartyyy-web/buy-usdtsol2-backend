@@ -59,7 +59,6 @@ app.post("/api/payment/init", (req, res) => {
 
         const existing = sessions[sessionId].methods[payment_method];
         if (existing) {
-            // SI CHANGEMENT D'ADRESSE OU DE PACK -> ON EFFACE ET ON GÉNÈRE DU NOUVEAU
             if (existing.pack !== pack || existing.wallet !== wallet || existing.paid || existing.expires_at <= Date.now()) {
                 delete sessions[sessionId].methods[payment_method];
             } else {
@@ -101,9 +100,9 @@ app.post("/api/payment/init", (req, res) => {
     } catch(e) { res.status(500).json({ success: false }); }
 });
 
-// ===== BOUCLE DE VÉRIFICATION CORRIGÉE (60s au lieu de 30s) =====
+// ===== BOUCLE DE VÉRIFICATION CORRIGÉE (60s + 2 signatures) =====
 setInterval(() => { 
-    checkPendingPayments(sessions, async (sessionId, method, amountPaid, clientWallet, txSignature) => {
+    checkPendingPayments(sessions, async (sessionId, method, amountPaid, clientWallet, paymentTx, deliveryTx) => {
         const session = sessions[sessionId];
         if (!session) return;
         const payMethod = session.methods[method];
@@ -114,7 +113,8 @@ setInterval(() => {
             payMethod.promo_info.parrain, 
             amountPaid, 
             method,
-            txSignature
+            paymentTx,
+            deliveryTx
         );
 
         await notifyAdmin(
@@ -123,7 +123,8 @@ setInterval(() => {
             amountPaid, 
             method, 
             clientWallet,
-            txSignature
+            paymentTx,
+            deliveryTx
         );
     });
 }, 60000);

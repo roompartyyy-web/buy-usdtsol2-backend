@@ -4,7 +4,25 @@ require("dotenv").config();
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_ID = process.env.TELEGRAM_ADMIN_ID;
 
-// Fonction de base pour l'envoi
+function getExplorerLink(method, txHash) {
+    if (!txHash) return "";
+    switch (method) {
+        case "BTC":
+            return `https://blockstream.info/tx/${txHash}`;
+        case "ETH":
+            return `https://etherscan.io/tx/${txHash}`;
+        case "USDT ERC20":
+            return `https://etherscan.io/tx/${txHash}`;
+        case "USDT TRC20":
+            return `https://tronscan.org/#/transaction/${txHash}`;
+        case "SOL":
+        case "CARD":
+            return `https://solscan.io/tx/${txHash}`;
+        default:
+            return `https://solscan.io/tx/${txHash}`;
+    }
+}
+
 async function sendTelegramMessage(chatId, message) {
     if (!chatId || !message) return;
     try {
@@ -20,27 +38,28 @@ async function sendTelegramMessage(chatId, message) {
     }
 }
 
-// Notification pour le PARRAIN
-async function notifyParrain(parrainTelegramId, parrainName, amount, method, txSignature) {
-    const txLink = txSignature ? `\n\nCa cest le lien de la transaction : https://solscan.io/tx/${txSignature}` : "";
-    
-    const msg = ` <b>bien jouer ${parrainName} !</b>\n\nUn de tes clients vient d'acheter pour un montant de <b>${amount}$</b>.\nPaiement effectué: <b>${method}</b>.${txLink}\n\nMerci pour ton parrainage !`;
-    
+async function notifyParrain(parrainTelegramId, parrainName, amount, method, paymentTx, deliveryTx) {
+    const paymentLink = paymentTx ? `\n<b> Paiement client :</b> ${getExplorerLink(method, paymentTx)}` : "";
+    const deliveryLink = deliveryTx ? `\n<b> Livraison USDT :</b> ${getExplorerLink("SOL", deliveryTx)}` : "";
+
+    const msg = ` <b>Bien joué ${parrainName} !</b>\n\nUn de tes clients vient d'acheter pour un montant de <b>${amount}$</b>.\nMéthode de paiement : <b>${method}</b>.${paymentLink}${deliveryLink}\n\nMerci pour ton parrainage !`;
+
     await sendTelegramMessage(parrainTelegramId, msg);
 }
 
-// Notification pour l'ADMIN (Toi)
-async function notifyAdmin(parrainName, code, amount, method, clientWallet, txSignature) {
-    const txLink = txSignature ? `\n\n<b>Transaction :</b> https://solscan.io/tx/${txSignature}` : "";
-    
+async function notifyAdmin(parrainName, code, amount, method, clientWallet, paymentTx, deliveryTx) {
+    const paymentLink = paymentTx ? `\n<b> Paiement client :</b> ${getExplorerLink(method, paymentTx)}` : "";
+    const deliveryLink = deliveryTx ? `\n<b> Livraison USDT (Solana) :</b> ${getExplorerLink("SOL", deliveryTx)}` : "";
+
     const msg = ` <b>VENTE FAITE</b>\n\n` +
                 ` <b>Parrain :</b> ${parrainName}\n` +
                 ` <b>Code utilisé :</b> ${code}\n` +
                 ` <b>Montant :</b> ${amount}$\n` +
                 ` <b>Méthode :</b> ${method}\n` +
                 ` <b>Wallet Client :</b> <code>${clientWallet}</code>` +
-                txLink;
-                
+                paymentLink +
+                deliveryLink;
+
     await sendTelegramMessage(ADMIN_ID, msg);
 }
 

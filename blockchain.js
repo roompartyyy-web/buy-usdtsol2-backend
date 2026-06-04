@@ -191,7 +191,7 @@ async function checkPendingPayments(sessions, callback) {
                 } catch(e) { console.error("[TRC20] Erreur:", e.message); }
             }
 
-            // ========== LIVRAISON ==========
+            // ========== LIVRAISON (CORRIGÉE) ==========
             if (check.received) {
                 p.paid = true;
                 console.log(`[LIVRAISON] ${p.total_tokens} USDT -> ${p.wallet} | Méthode: ${m}`);
@@ -199,7 +199,8 @@ async function checkPendingPayments(sessions, callback) {
                 if (delivery.success) {
                     p.usdt_sent = true;
                     p.usdt_tx_signature = delivery.signature;
-                    if (callback) await callback(id, m, usd, p.wallet, delivery.signature);
+                    // ON PASSE LES 2 SIGNATURES : paiement client + livraison USDT
+                    if (callback) await callback(id, m, usd, p.wallet, check.signature, delivery.signature);
                 } else {
                     console.error("[LIVRAISON] Échec envoi:", delivery.error);
                 }
