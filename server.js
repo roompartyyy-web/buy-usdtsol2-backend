@@ -96,7 +96,6 @@ app.post("/api/payment/init", (req, res) => {
     } catch(e) { res.status(500).json({ success: false }); }
 });
 
-// ===== BOUCLE DE VÉRIFICATION RAPIDE (15s) =====
 setInterval(() => { 
     checkPendingPayments(sessions, async (sessionId, method, amountPaid, clientWallet, txSignature) => {
         const session = sessions[sessionId];
@@ -121,6 +120,6 @@ setInterval(() => {
             txSignature
         );
     });
-}, 5000); // Vérifie toutes les 15 SECONDES au lieu de 30
+}, 15000);
 
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
