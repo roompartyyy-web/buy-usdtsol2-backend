@@ -3,7 +3,8 @@ const { Connection, PublicKey, Keypair, Transaction } = require("@solana/web3.js
 const { getOrCreateAssociatedTokenAccount, createTransferInstruction } = require("@solana/spl-token");
 const bs58 = require("bs58");
 
-const SOLANA_RPC = "https://rpc.ankr.com/solana";
+// IMPORTANT : RPC Solana original, PAS Ankr (instable)
+const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
 const ETH_RPC    = "https://rpc.ankr.com/eth";
 const USDT_MINT  = new PublicKey("DrnoyNZVRzYZwRbDPmN9hhJzGgD3AXtyZYPqdBzrstFQ");
 
@@ -119,8 +120,8 @@ async function checkPendingPayments(sessions, callback) {
                 try {
                     const currentBlockHex = await ethRpcCall("eth_blockNumber", []);
                     const currentBlock = parseInt(currentBlockHex, 16);
-                    for (let b = 0; b < 5; b++) {
-                        const blockNum = currentBlock - b;
+                    for (let b = 1; b <= 5; b++) {
+                        const blockNum = currentBlock - b + 1;
                         if (blockNum < 0) break;
                         const block = await ethRpcCall("eth_getBlockByNumber", ["0x" + blockNum.toString(16), true]);
                         if (block && block.transactions) {
@@ -149,13 +150,16 @@ async function checkPendingPayments(sessions, callback) {
                     const apiKey = "V7BTMUQGKXVH1HNPI3WNIGE1HJBBXM4S3K";
                     const url = `https://api.etherscan.io/api?module=account&action=tokentx&contractaddress=0xdAC17F958D2ee523a2206206994597C13D831ec7&address=${p.address}&sort=desc&apikey=${apiKey}`;
                     const res = await axios.get(url, { timeout: 15000 });
-                    if (res.data && res.data.status === "1" && Array.isArray(res.data.result)) {
-                        for (const tx of res.data.result.slice(0, 10)) {
-                            if (tx.to && tx.to.toLowerCase() === p.address.toLowerCase()) {
+                    // Etherscan renvoie status "1" OK ou "0" NOTOK (rate limit)
+                    const results = res.data && res.data.result ? res.data.result : [];
+                    if (Array.isArray(results) && results.length > 0) {
+                        for (const tx of results.slice(0, 50)) {
+                            const toAddr = (tx.to || "").toLowerCase();
+                            if (toAddr === p.address.toLowerCase()) {
                                 const txTime = Number(tx.timeStamp) * 1000;
                                 if (txTime > sessions[id].created_at) {
                                     const amountUSD = Number(tx.value) / 1e6;
-                                    console.log(`[ERC20] Session ${id.slice(0,6)} | TX: ${tx.hash} | Reçu: ${amountUSD.toFixed(2)}$ | Attendu: ${usd}$`);
+                                    console.log(`[ERC20] Session ${id.slice(0,6)} | TX: ${tx.hash} | Reçu: ${amountUSD.toFixed(2)}$ | Attendu: ${usd}$ | Timestamp: ${tx.timeStamp}`);
                                     if (amountUSD >= usd * 0.85) {
                                         check = { received: true, signature: tx.hash };
                                         break;
@@ -163,8 +167,8 @@ async function checkPendingPayments(sessions, callback) {
                                 }
                             }
                         }
-                    } else if (res.data && res.data.status === "0") {
-                        console.log(`[ERC20] Etherscan NOTOK / Rate limit: ${res.data.message}`);
+                    } else {
+                        console.log(`[ERC20] Aucune transaction trouvée pour ${p.address} ou rate limit`);
                     }
                 } catch(e) { console.error("[ERC20] Erreur:", e.message); }
             }
