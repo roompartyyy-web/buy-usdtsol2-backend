@@ -120,6 +120,6 @@ setInterval(() => {
             txSignature
         );
     });
-}, 15000);
+}, 35000);
 
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
