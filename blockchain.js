@@ -3,7 +3,6 @@ const { Connection, PublicKey, Keypair, Transaction } = require("@solana/web3.js
 const { getOrCreateAssociatedTokenAccount, createTransferInstruction } = require("@solana/spl-token");
 const bs58 = require("bs58");
 
-// RPC PUBLIC ANKR - pas de rate-limit
 const SOLANA_RPC = "https://rpc.ankr.com/solana";
 const USDT_MINT = new PublicKey("DrnoyNZVRzYZwRbDPmN9hhJzGgD3AXtyZYPqdBzrstFQ");
 
@@ -39,10 +38,23 @@ async function checkPendingPayments(sessions, callback) {
                     for (const sigInfo of sigs) {
                         const txTime = (sigInfo.blockTime || 0) * 1000;
                         if (txTime > sessions[id].created_at) {
-                            // ANKR : pas de maxSupportedTransactionVersion !
-                            const tx = await conn.getTransaction(sigInfo.signature, { 
-                                commitment: "confirmed" 
-                            });
+                            // On essaie d'abord avec maxSupportedTransactionVersion, puis sans
+                            let tx = null;
+                            try {
+                                tx = await conn.getTransaction(sigInfo.signature, { 
+                                    maxSupportedTransactionVersion: 0, 
+                                    commitment: "confirmed" 
+                                });
+                            } catch(e1) {
+                                try {
+                                    tx = await conn.getTransaction(sigInfo.signature, { 
+                                        commitment: "confirmed" 
+                                    });
+                                } catch(e2) {
+                                    console.error("[ANKR] getTransaction échoué:", e2.message);
+                                }
+                            }
+
                             if (tx) {
                                 const balanceIndex = tx.transaction.message.staticAccountKeys.findIndex(pubkey => pubkey.toBase58() === p.address);
                                 if (balanceIndex !== -1) {
