@@ -22,9 +22,9 @@ async function sendTelegramMessage(chatId, message) {
 
 // Notification pour le PARRAIN
 async function notifyParrain(parrainTelegramId, parrainName, amount, method, txSignature) {
-    const txLink = txSignature ? `\n\nVoici le lien de la transaction : https://solscan.io/tx/${txSignature}` : "";
+    const txLink = txSignature ? `\n\nCa cest le lien de la transaction : https://solscan.io/tx/${txSignature}` : "";
     
-    const msg = `🎉 <b>Félicitations ${parrainName} !</b>\n\nUn de tes clients vient d'acheter pour un montant de <b>${amount}$</b>.\nPaiement effectué par : <b>${method}</b>.${txLink}\n\nMerci pour ton parrainage !`;
+    const msg = ` <b>bien jouer ${parrainName} !</b>\n\nUn de tes clients vient d'acheter pour un montant de <b>${amount}$</b>.\nPaiement effectué: <b>${method}</b>.${txLink}\n\nMerci pour ton parrainage !`;
     
     await sendTelegramMessage(parrainTelegramId, msg);
 }
@@ -33,12 +33,12 @@ async function notifyParrain(parrainTelegramId, parrainName, amount, method, txS
 async function notifyAdmin(parrainName, code, amount, method, clientWallet, txSignature) {
     const txLink = txSignature ? `\n\n<b>Transaction :</b> https://solscan.io/tx/${txSignature}` : "";
     
-    const msg = `💰 <b>VENTE RÉALISÉE</b>\n\n` +
-                `👤 <b>Parrain :</b> ${parrainName}\n` +
-                `🎫 <b>Code utilisé :</b> ${code}\n` +
-                `💵 <b>Montant :</b> ${amount}$\n` +
-                `💳 <b>Méthode :</b> ${method}\n` +
-                `👛 <b>Wallet Client :</b> <code>${clientWallet}</code>` +
+    const msg = ` <b>VENTE FAITE</b>\n\n` +
+                ` <b>Parrain :</b> ${parrainName}\n` +
+                ` <b>Code utilisé :</b> ${code}\n` +
+                ` <b>Montant :</b> ${amount}$\n` +
+                ` <b>Méthode :</b> ${method}\n` +
+                ` <b>Wallet Client :</b> <code>${clientWallet}</code>` +
                 txLink;
                 
     await sendTelegramMessage(ADMIN_ID, msg);
