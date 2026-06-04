@@ -4,7 +4,7 @@ const { getOrCreateAssociatedTokenAccount, createTransferInstruction } = require
 const bs58 = require("bs58");
 
 // RPC PRIVÉ HELIUS - plus de 429 !
-const SOLANA_RPC = "https://mainnet.helius-rpc.com/?api-key=764be8a6-6eb9-4994-9dee-da135e6b48c3";
+const SOLANA_RPC = "https://rpc.solanatracker.io/public";
 const USDT_MINT = new PublicKey("DrnoyNZVRzYZwRbDPmN9hhJzGgD3AXtyZYPqdBzrstFQ");
 
 async function sendUSDT(toAddress, amountUSDT) {
