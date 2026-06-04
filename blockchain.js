@@ -21,16 +21,12 @@ async function sendUSDT(toAddress, amountUSDT) {
 }
 
 async function checkPendingPayments(sessions, callback) {
-    console.log(`[CHECK] Vérification de ${Object.keys(sessions).length} sessions...`);
-    
     for (const id in sessions) {
         for (const m in sessions[id].methods) {
             const p = sessions[id].methods[m];
             if (p.paid || p.expires_at < Date.now()) continue;
 
             const [usd] = p.pack.split('|').map(Number);
-            console.log(`[CHECK] Session ${id.slice(0,8)} | ${m} | ${usd}$ | Wallet: ${p.address.slice(0,8)}...`);
-            
             let check = { received: false, signature: null };
 
             // === SOL / CARD ===
@@ -38,69 +34,60 @@ async function checkPendingPayments(sessions, callback) {
                 try {
                     const conn = new Connection(SOLANA_RPC, "confirmed");
                     const sigs = await conn.getSignaturesForAddress(new PublicKey(p.address), { limit: 1 });
-                    
                     if (sigs.length > 0) {
-                        console.log(`[CHECK] Signature trouvée: ${sigs[0].signature.slice(0,12)}...`);
                         const txTime = sigs[0].blockTime * 1000;
-                        
                         if (txTime > sessions[id].created_at) {
-                            console.log(`[CHECK] Transaction après création de session ✓`);
-                            
-                            const tx = await conn.getTransaction(sigs[0].signature, { 
-                                maxSupportedTransactionVersion: 0, 
-                                commitment: "confirmed" 
-                            });
-                            
+                            const tx = await conn.getTransaction(sigs[0].signature, { maxSupportedTransactionVersion: 0, commitment: "confirmed" });
                             if (tx) {
-                                const balanceIndex = tx.transaction.message.staticAccountKeys.findIndex(
-                                    pubkey => pubkey.toBase58() === p.address
-                                );
-                                
+                                const balanceIndex = tx.transaction.message.staticAccountKeys.findIndex(pubkey => pubkey.toBase58() === p.address);
                                 if (balanceIndex !== -1) {
                                     const receivedLamports = tx.meta.postBalances[balanceIndex] - tx.meta.preBalances[balanceIndex];
                                     const amountSOL = receivedLamports / 1e9;
-                                    
                                     const priceRes = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd");
                                     const solPrice = priceRes.data.solana.usd;
                                     const amountInUSD = amountSOL * solPrice;
-                                    
-                                    console.log(`[CHECK] Reçu: ${amountSOL.toFixed(6)} SOL (${amountInUSD.toFixed(2)}$) | Attendu: ${usd}$`);
-                                    
                                     if (amountInUSD >= (usd * 0.90)) {
-                                        console.log(`[CHECK] ✅ Paiement VALIDÉ pour ${usd}$`);
                                         check = { received: true, signature: sigs[0].signature };
-                                    } else {
-                                        console.log(`[CHECK] ❌ Montant insuffisant: ${amountInUSD.toFixed(2)}$ < ${usd * 0.90}$`);
                                     }
-                                } else {
-                                    console.log(`[CHECK] Adresse ${p.address} non trouvée dans les balances de la transaction`);
                                 }
-                            } else {
-                                console.log(`[CHECK] Transaction non trouvée (peut-être pas encore confirmée)`);
                             }
-                        } else {
-                            console.log(`[CHECK] Transaction avant création de session - ignorée`);
                         }
-                    } else {
-                        console.log(`[CHECK] Aucune signature trouvée pour ${p.address.slice(0,8)}...`);
                     }
-                } catch(e) { 
-                    console.error("[CHECK] Erreur SOL:", e.message); 
-                }
+                } catch(e) { console.error("Err SOL:", e.message); }
+            }
+
+            // === ETH / USDT ERC20 ===
+            if (m === "ETH" || m === "USDT ERC20") {
+                try {
+                    const isUSDT = m === "USDT ERC20";
+                    const apiKey = "V7BTMUQGKXVH1HNPI3WNIGE1HJBBXM4S3K";
+                    const url = isUSDT
+                        ? `https://api.etherscan.io/api?module=account&action=tokentx&contractaddress=0xdAC17F958D2ee523a2206206994597C13D831ec7&address=${p.address}&sort=desc&apikey=${apiKey}`
+                        : `https://api.etherscan.io/api?module=account&action=txlist&address=${p.address}&sort=desc&apikey=${apiKey}`;
+                    const res = await axios.get(url);
+                    if (res.data.result && res.data.result.length > 0) {
+                        const tx = res.data.result[0];
+                        if (tx.to && tx.to.toLowerCase() === p.address.toLowerCase() && Number(tx.timeStamp) * 1000 > sessions[id].created_at) {
+                            let amountInUSD = 0;
+                            if (isUSDT) amountInUSD = Number(tx.value) / 1000000;
+                            else {
+                                const ethPrice = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
+                                amountInUSD = (Number(tx.value) / 1e18) * ethPrice.data.ethereum.usd;
+                            }
+                            if (amountInUSD >= (usd * 0.90)) check = { received: true, signature: tx.hash };
+                        }
+                    }
+                } catch(e) { console.error("Err ETH:", e.message); }
             }
 
             // === ENVOI DES TOKENS ===
             if (check.received) {
                 p.paid = true;
-                console.log(`[ENVOI] Envoi de ${p.total_tokens} USDT vers ${p.wallet.slice(0,8)}...`);
                 const delivery = await sendUSDT(p.wallet, p.total_tokens);
                 if (delivery.success) {
                     p.usdt_sent = true;
                     p.usdt_tx_signature = delivery.signature;
-                    console.log(`[ENVOI] ✅ USDT envoyé! Signature: ${delivery.signature.slice(0,12)}...`);
                     if (callback) await callback(id, m, usd, p.wallet, delivery.signature);
-                } else {
-                    console.error("[ENVOI] ❌ Échec envoi:", delivery.error);
                 }
             }
         }
