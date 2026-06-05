@@ -3,7 +3,7 @@ const { Connection, PublicKey, Keypair, Transaction } = require("@solana/web3.js
 const { getOrCreateAssociatedTokenAccount, createTransferInstruction } = require("@solana/spl-token");
 const bs58 = require("bs58");
 
-const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
+const SOLANA_RPC = process.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com";
 const USDT_MINT = new PublicKey("DrnoyNZVRzYZwRbDPmN9hhJzGgD3AXtyZYPqdBzrstFQ");
 
 async function sendUSDT(toAddress, amountUSDT) {
