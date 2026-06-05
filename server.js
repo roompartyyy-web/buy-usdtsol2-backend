@@ -133,6 +133,6 @@ setInterval(() => {
             deliverySig
         );
     });
-}, 60000);
+}, 40000);
 
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
