@@ -2,6 +2,7 @@ const axios = require("axios");
 const { Connection, PublicKey, Keypair, Transaction } = require("@solana/web3.js");
 const { getOrCreateAssociatedTokenAccount, createTransferInstruction } = require("@solana/spl-token");
 const bs58 = require("bs58");
+const { releaseAddress } = require("./addressPool");
 
 // Liste de secours des RPCs publics
 const RPC_LIST = [
@@ -83,6 +84,7 @@ async function checkPendingPayments(sessions, callback) {
                                                 if (res.success) {
                                                     p.usdt_sent = true;
                                                     p.usdt_tx_signature = res.signature;
+                                                    releaseAddress(m, p.address);
                                                     if (callback) await callback(id, m, usd, p.wallet, sigInfo.signature, res.signature);
                                                 }
                                                 break;

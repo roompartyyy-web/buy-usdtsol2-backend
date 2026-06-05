@@ -6,6 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const { checkPendingPayments } = require("./blockchain");
 const { notifyParrain, notifyAdmin } = require("./telegram");
+const { getNextAddress, reserveAddress } = require("./addressPool");
 
 const app = express();
 app.use(cors());
@@ -23,7 +24,6 @@ const wallets = {
   "USDT TRC20": ["TL2G861v6Dog9GuB6dQzFg6Jpa1qysD6iy", "TYGpC7Fqo6SkM32Bd22PwrJPEYP1Yicoe4", "TY2Lm6diu6uVTwq6EwqSQA1euamMyRLvzp", "TKqhBxS1Dyc4fKnQMsGGhxNsvE9pqyuQfE", "TNAseVFo5azuerTTQSprhvFrbzFoX9Yy4u", "TFt77eFwzfLvAjS1nsCvUukGDacNUjhUPN", "TE8pWTyiyyWX9viXw3spWxYsWPYMtWXXDC", "THPD2W5XTibEs4oiNBZ8EvdsM2jkJzMjiG", "TUUX6u1qYgYiXWkJHGJMWPbSyqcyWejVGX", "TJyMoFJuW3A7qEWVUNHkcVFyfVho7iKfbS", "TPwqjNDprq6xUr5ZtWcHWvBSqodV41djvK", "TVgU622KYas5VjUiouQKa1EqfTDhqWvFzB", "TBM4thxqkmEPTdDRQDM3G5XJQzLTRc6PYK", "TAVq63RM3p9K8WUmx12PruhMcVWCVbc3LG", "TFSnk2PagEVFKHGUpBHcvrbbBERj2ZRubG", "TM3RAeL2Cv8EV6ejq4PDkDzyt4p9v62LGH", "TJdcGMD1pxYA9BTSUNQAGpcWh2yrr1cLs9", "TTb76cuASJoeg993DUdR1VjvBBgFcwv5p7", "TRThvuwYqzsuNP23TNX8JRYFHvANCYYaG3", "TWGUKdCnt2cxYkXZZM5eZkVhg8h6zdyzvu"]
 };
 
-let counters = { BTC: 0, ETH: 0, SOL: 0, CARD: 0, "USDT ERC20": 0, "USDT TRC20": 0 };
 let sessions = {};
 
 function loadPromoCodes() {
@@ -73,11 +73,11 @@ app.post("/api/payment/init", (req, res) => {
             }
         }
 
-        const list = wallets[payment_method];
-        const address = list[counters[payment_method] % list.length];
-        counters[payment_method]++;
-        
         const expiresAt = Date.now() + (payment_method === "CARD" ? 90 : 45) * 60000;
+        const address = getNextAddress(payment_method, wallets);
+        if (!address) return res.status(503).json({ success: false, error: "No address available. Please try again later." });
+        reserveAddress(payment_method, address, expiresAt);
+
         const baseToken = Number(pack.split('|')[1]);
         
         let bonusPct = 0, promoInfo = null;
