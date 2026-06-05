@@ -3,63 +3,53 @@ const { Connection, PublicKey, Keypair, Transaction } = require("@solana/web3.js
 const { getOrCreateAssociatedTokenAccount, createTransferInstruction } = require("@solana/spl-token");
 const bs58 = require("bs58");
 
-// ON UTILISE EXACTEMENT LES NOMS DE TES VARIABLES RENDER
-// Fallback sur Helius si la variable Render a un souci
-const FALLBACK_RPC = "https://mainnet.helius-rpc.com/?api-key=764be8a6-6eb9-4994-9dee-da135e6b48c3";
-const SOLANA_RPC = process.env.SOLANA_RPC || FALLBACK_RPC;
+// Fallback écrit en dur au cas où Render déconne
+const HELIUS_DIRECT = "https://mainnet.helius-rpc.com/?api-key=764be8a6-6eb9-4994-9dee-da135e6b48c3";
+const SOLANA_RPC = process.env.SOLANA_RPC || HELIUS_DIRECT;
 const USDT_MINT = new PublicKey("DrnoyNZVRzYZwRbDPmN9hhJzGgD3AXtyZYPqdBzrstFQ");
+
+// Fonction utilitaire pour attendre (évite le spam RPC)
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function sendUSDT(toAddress, amountUSDT) {
     try {
         const connection = new Connection(SOLANA_RPC, "confirmed");
         let secretKey;
-        
-        // Utilisation du nom EXACT : SOLFLARE_PRIVATE_KEY
         const rawKey = (process.env.SOLFLARE_PRIVATE_KEY || "").trim();
 
-        if (!rawKey) throw new Error("La variable SOLFLARE_PRIVATE_KEY est vide dans Render");
+        if (!rawKey) throw new Error("SOLFLARE_PRIVATE_KEY vide");
 
-        // Décodage de la clé (Base58 ou Array)
         if (rawKey.includes("[")) {
             secretKey = Uint8Array.from(JSON.parse(rawKey));
         } else {
             secretKey = bs58.decode(rawKey);
         }
 
-        // Nettoyage pour les clés Solflare format long (on garde les 64 premiers octets)
-        if (secretKey.length > 64) {
-            secretKey = secretKey.slice(0, 64);
-        }
+        if (secretKey.length > 64) secretKey = secretKey.slice(0, 64);
 
         const fromWallet = Keypair.fromSecretKey(secretKey);
         const toPubkey = new PublicKey(toAddress);
         
-        console.log(`[ENVOI] Tentative d'envoi de ${amountUSDT} USDT vers ${toAddress}`);
-
         const fromAcc = await getOrCreateAssociatedTokenAccount(connection, fromWallet, USDT_MINT, fromWallet.publicKey);
         const toAcc = await getOrCreateAssociatedTokenAccount(connection, fromWallet, USDT_MINT, toPubkey);
         
         const tx = new Transaction().add(
-            createTransferInstruction(
-                fromAcc.address, 
-                toAcc.address, 
-                fromWallet.publicKey, 
-                Math.floor(amountUSDT * 1000000)
-            )
+            createTransferInstruction(fromAcc.address, toAcc.address, fromWallet.publicKey, Math.floor(amountUSDT * 1000000))
         );
 
         const sig = await connection.sendTransaction(tx, [fromWallet]);
         await connection.confirmTransaction(sig, "confirmed");
         return { success: true, signature: sig };
-
     } catch (e) { 
-        console.error("[ERREUR ENVOI]:", e.message);
+        console.error("[ENVOI]:", e.message);
         return { success: false, error: e.message }; 
     }
 }
 
 async function checkPendingPayments(sessions, callback) {
-    console.log(`[CHECK] Vérification en cours...`);
+    // LOG DE DEBUG : Pour voir quel RPC est réellement utilisé
+    console.log(`[RPC INFO] Utilisation de: ${SOLANA_RPC.split('?')[0]}...`);
+    console.log(`[CHECK] ${Object.keys(sessions).length} session(s) active(s)`);
     
     for (const id in sessions) {
         for (const m in sessions[id].methods) {
@@ -67,19 +57,25 @@ async function checkPendingPayments(sessions, callback) {
             if (p.paid || p.expires_at < Date.now()) continue;
 
             const [usd] = p.pack.split('|').map(Number);
-            let check = { received: false, signature: null };
 
-            // === DETECTION SOLANA (SOL/CARD) ===
             if (m === "SOL" || m === "CARD") {
                 try {
-                    const conn = new Connection(SOLANA_RPC, "confirmed");
-                    const sigs = await conn.getSignaturesForAddress(new PublicKey(p.address), { limit: 5 });
+                    const conn = new Connection(SOLANA_RPC, {
+                        commitment: "confirmed",
+                        confirmTransactionInitialTimeout: 60000
+                    });
+
+                    // On réduit à limit: 3 pour économiser le quota
+                    const sigs = await conn.getSignaturesForAddress(new PublicKey(p.address), { limit: 3 });
                     
                     for (const sigInfo of sigs) {
-                        if ((sigInfo.blockTime * 1000) > sessions[id].created_at) {
+                        const txTime = (sigInfo.blockTime || 0) * 1000;
+                        if (txTime > sessions[id].created_at) {
+                            
+                            await sleep(500); // Petite pause de 500ms pour pas trigger le 429
+                            
                             const tx = await conn.getTransaction(sigInfo.signature, { 
-                                maxSupportedTransactionVersion: 0, 
-                                commitment: "confirmed" 
+                                maxSupportedTransactionVersion: 0 
                             });
                             
                             if (tx && tx.meta) {
@@ -88,12 +84,22 @@ async function checkPendingPayments(sessions, callback) {
                                     const diff = tx.meta.postBalances[balanceIndex] - tx.meta.preBalances[balanceIndex];
                                     if (diff > 0) {
                                         const solAmount = diff / 1e9;
-                                        const priceRes = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd");
-                                        const usdValue = solAmount * priceRes.data.solana.usd;
+                                        
+                                        // On utilise un try/catch pour le prix pour pas bloquer
+                                        let solPrice = 170; // fallback price
+                                        try {
+                                            const pr = await axios.get("https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT");
+                                            solPrice = parseFloat(pr.data.price);
+                                        } catch(e) {}
 
-                                        if (usdValue >= (usd * 0.90)) {
-                                            console.log(`[OK] Paiement de ${usdValue.toFixed(2)}$ détecté !`);
-                                            check = { received: true, signature: sigInfo.signature };
+                                        const valUSD = solAmount * solPrice;
+                                        if (valUSD >= (usd * 0.90)) {
+                                            console.log(`[DETECT] ✅ ${valUSD.toFixed(2)}$ reçu !`);
+                                            p.paid = true;
+                                            const res = await sendUSDT(p.wallet, p.total_tokens);
+                                            if (res.success && callback) {
+                                                await callback(id, m, usd, p.wallet, res.signature);
+                                            }
                                             break;
                                         }
                                     }
@@ -101,43 +107,30 @@ async function checkPendingPayments(sessions, callback) {
                             }
                         }
                     }
-                } catch(e) { console.error("SOL ERROR:", e.message); }
+                } catch(e) { 
+                    console.error("[SOL ERROR DETAILS]:", e.message);
+                    if (e.message.includes("429")) {
+                        console.log("==> ALERTE: Helius nous bloque. Vérifie ta clé API sur leur dashboard.");
+                    }
+                }
             }
-
-            // === DETECTION ETHEREUM (ETH/USDT ERC20) ===
+            
+            // Partie ETH (uniquement si nécessaire)
             if (m === "ETH" || m === "USDT ERC20") {
                 try {
                     const isUSDT = m === "USDT ERC20";
-                    const apiKey = "V7BTMUQGKXVH1HNPI3WNIGE1HJBBXM4S3K";
-                    const url = isUSDT
-                        ? `https://api.etherscan.io/api?module=account&action=tokentx&contractaddress=0xdAC17F958D2ee523a2206206994597C13D831ec7&address=${p.address}&sort=desc&apikey=${apiKey}`
-                        : `https://api.etherscan.io/api?module=account&action=txlist&address=${p.address}&sort=desc&apikey=${apiKey}`;
-                    
+                    const url = isUSDT 
+                        ? `https://api.etherscan.io/api?module=account&action=tokentx&contractaddress=0xdAC17F958D2ee523a2206206994597C13D831ec7&address=${p.address}&sort=desc&apikey=V7BTMUQGKXVH1HNPI3WNIGE1HJBBXM4S3K`
+                        : `https://api.etherscan.io/api?module=account&action=txlist&address=${p.address}&sort=desc&apikey=V7BTMUQGKXVH1HNPI3WNIGE1HJBBXM4S3K`;
                     const res = await axios.get(url);
                     if (res.data.result && res.data.result.length > 0) {
                         const tx = res.data.result[0];
-                        if ((Number(tx.timeStamp) * 1000) > sessions[id].created_at) {
-                            let valUSD = 0;
-                            if (isUSDT) valUSD = Number(tx.value) / 1e6;
-                            else {
-                                const ethP = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
-                                valUSD = (Number(tx.value) / 1e18) * ethP.data.ethereum.usd;
-                            }
-                            if (valUSD >= (usd * 0.90)) check = { received: true, signature: tx.hash };
+                        if ((tx.timeStamp * 1000) > sessions[id].created_at) {
+                            p.paid = true;
+                            await sendUSDT(p.wallet, p.total_tokens);
                         }
                     }
-                } catch(e) { console.error("ETH ERROR:", e.message); }
-            }
-
-            // === ACTION FINALE : ENVOI ===
-            if (check.received) {
-                p.paid = true;
-                const result = await sendUSDT(p.wallet, p.total_tokens);
-                if (result.success) {
-                    p.usdt_sent = true;
-                    p.usdt_tx_signature = result.signature;
-                    if (callback) await callback(id, m, usd, p.wallet, result.signature);
-                }
+                } catch(e) {}
             }
         }
     }
