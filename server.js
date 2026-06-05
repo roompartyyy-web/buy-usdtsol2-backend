@@ -59,7 +59,6 @@ app.post("/api/payment/init", (req, res) => {
 
         const existing = sessions[sessionId].methods[payment_method];
         if (existing) {
-            // SI CHANGEMENT D'ADRESSE OU DE PACK -> ON EFFACE ET ON GÉNÈRE DU NOUVEAU
             if (existing.pack !== pack || existing.wallet !== wallet || existing.paid || existing.expires_at <= Date.now()) {
                 delete sessions[sessionId].methods[payment_method];
             } else {
@@ -101,16 +100,14 @@ app.post("/api/payment/init", (req, res) => {
     } catch(e) { res.status(500).json({ success: false }); }
 });
 
-// ===== BOUCLE DE VÉRIFICATION CORRIGÉE =====
+// BOUCLE DE VÉRIFICATION TOUTES LES 60 SECONDES
 setInterval(() => { 
-    // On passe sessions et le callback incluant txSignature
     checkPendingPayments(sessions, async (sessionId, method, amountPaid, clientWallet, txSignature) => {
         const session = sessions[sessionId];
         if (!session) return;
         const payMethod = session.methods[method];
         if (!payMethod || !payMethod.referral || !payMethod.promo_info) return;
         
-        // Notifications via telegram.js enrichies avec txSignature
         await notifyParrain(
             payMethod.promo_info.telegram_id, 
             payMethod.promo_info.parrain, 
