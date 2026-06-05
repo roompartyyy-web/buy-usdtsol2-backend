@@ -13,6 +13,7 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
+// Tes portefeuilles (inchangés)
 const wallets = {
   CARD: ["3FWy6LjDQ17SY6czWjREy3C84R2gmSPaTEvTW9oPE33B", "2FShUVxTGzDVfzUsuJfUMuRYoBSdBWeFhKieMEJ1Q9gy", "2CNgSTKaEhXxkRmir3XU81Ur15YQQBZyVDhNkq5eQqAt", "GbtcvPDPxvSZ96CCcBafbpnttX2CyWhNbKjFSz6AfJa4", "ST52drfrp2SVmkQJaaj5MydB4oNymNyr6DpKZouuf5i", "5o6hsVugKNYbPSAptZ3asKdZwvum9DfYucx4AVEXyXET", "4542iDgnGRMawNtURVVvx9VJf8F3VB4EdFtWBEmD3oLh", "4CpbLrYgJxuWpBLRS2z97AZmH6jDkmbtMa3L2q7qT3KE", "7dMexakhYyRJSeGpfnFtsD8p8rxeiAh5HvsZiUPE5GCC", "AXU5ZX8JN2LTwyH79GGd3GSCVd1MG8X3eFEGt12ebSt2", "7Lj5wKmkffA7BsoNmieUPLvs4LvkV8XjjEnhkGbNK2JK", "FcX7eHLMWhSnhcdJwKRe6tM76mKXR7hhtskRFYXSyND3", "CvE4ZdDvbM4NNrgb32Uu3mYiMGDoXW2Mbv6midPZpgAF", "7dtDdUCzXCvjHZ4SkWQtcqjZSEKDSuzttjhzoWrekq45", "4egn3EDXXNvcvSAdxqy8BExr4RUcTzV9UHatWkSrUPuL", "5jR47fFqkjWLRk8VLpx3VC6ZEo7fcY5dHzCWwm8aPmwN", "9iwKavVdxP82HKSbaZSoRHwuRoTGGJP86pjBC3b1BFMJ", "1fZAjLFyPbCegiyQViZX6wckUapPp4SztF84Rtgwms6", "EZ3sdtuBBX1sWpqnSBgNNXZD7yeLXPLF2s2K2jwxEqru", "AJtZoYs2RDKz9AsDXG1wUPmcfyUbciwFWPim9TU9Eg97"],
   BTC: ["bc1qfdayftrkk7sxam0ag93qnqeqf6t7w5plcx5ccp", "bc1qd9q4mc0zvyslm66tc0q9s2lfvtluh025p2h26s", "bc1qn4rrej70emanjsxvepv4jurvzjejrqtqljy58a", "bc1q4rjyzupyp0qjwjt8y906xvwe9azwljffrum0xr", "bc1qvqcjzws52x2c7kp9favkwg2v898a2p9s5jlt6m", "bc1q4rjyzupyp0qjwjt8y906xvwe9azwljffrum0xr", "bc1qghs6ec75wfemmvwx6z8j8cff6fnpgl5h224vjh", "bc1qhwqydxaxrkm7u6qkl5h79lqed2uku0vht3yd68", "bc1q4ncly2qljk2rfstswh5remk0q47av23dr9mq3v", "bc1qnws6l49d5hlsua0cy9g77x0ywsyvn83rx6a86z", "bc1qmqtxvqffww2tm7tp3w80tff8x4clwpxet85pr8", "bc1q5tatnllg0vrvjgurm42c7je4fpukzyr8ukpd5m", "bc1q8ffd2ka29zh9equse7n9829qwtthx6g7ywtuak", "bc1qdk6sd45whetxhc6vqksl7pzlvgrgkjfn6e5w7z", "bc1qdfzszjrjgl7mmu4xwlrl2fy74ckkpmz2a9ty3q", "bc1qpjhlcemhg6vqpzgqc39j0hpg0ma4qmx7mrza7w", "bc1q4a26lvhw2d5rdaq5sn5e6nkytpgccqsn0pzuns", "bc1qkzh6afrg77z3lhemqt6pwscveeyx4ktpf880qn", "bc1q2kv33gn239vwxrv9fe05vmqhkqwkhfs5k4qyej", "bc1qkte6x8ge93w2fxuzmgt3znxcufne8xxknr56gz"],
@@ -36,6 +37,8 @@ app.get("/api/payment/status/:sessionId/:method", (req, res) => {
     const { sessionId, method } = req.params;
     if (!sessions[sessionId] || !sessions[sessionId].methods[method]) return res.json({ status: "not_found" });
     const pay = sessions[sessionId].methods[method];
+    
+    // On renvoie "completed" si les USDT sont envoyés
     res.json({
         status: pay.usdt_sent ? "completed" : (pay.paid ? "detected" : "waiting"),
         wallet: pay.wallet,
@@ -102,34 +105,26 @@ app.post("/api/payment/init", (req, res) => {
 
 // BOUCLE DE VÉRIFICATION
 setInterval(() => { 
-    checkPendingPayments(sessions, async (sessionId, method, amountPaid, clientWallet, paymentTx, deliveryTx) => {
+    checkPendingPayments(sessions, async (sessionId, method, amountPaid, clientWallet, txSignature) => {
         const session = sessions[sessionId];
         if (!session) return;
         const p = session.methods[method];
         
-        // 1. Notification Parrain (seulement si promo utilisée)
+        // 1. Notification Parrain (seulement s'il y en a un)
         if (p.promo_info) {
-             await notifyParrain(
-                 p.promo_info.telegram_id, 
-                 p.promo_info.parrain, 
-                 amountPaid, 
-                 method, 
-                 paymentTx, 
-                 deliveryTx
-             );
+             await notifyParrain(p.promo_info.telegram_id, p.promo_info.parrain, amountPaid, method, txSignature);
         }
 
-        // 2. Notification Admin (Toujours)
+        // 2. Notification Admin (TOUJOURS)
         await notifyAdmin(
             p.promo_info ? p.promo_info.parrain : "Aucun", 
             p.referral || "Aucun", 
             amountPaid, 
             method, 
             clientWallet,
-            paymentTx,
-            deliveryTx
+            txSignature
         );
     });
-}, 30000);
+}, 60000);
 
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
