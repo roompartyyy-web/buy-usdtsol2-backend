@@ -4,7 +4,7 @@ const { getOrCreateAssociatedTokenAccount, createTransferInstruction } = require
 const bs58 = require("bs58");
 
 // Utilise la variable d'env ou le RPC public en fallback
-const SOLANA_RPC = process.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com";
+const SOLANA_RPC = process.env.SOLANA_RPC || "https://mainnet.helius-rpc.com/?api-key=764be8a6-6eb9-4994-9dee-da135e6b48c3";
 const USDT_MINT = new PublicKey("DrnoyNZVRzYZwRbDPmN9hhJzGgD3AXtyZYPqdBzrstFQ");
 
 async function sendUSDT(toAddress, amountUSDT) {
