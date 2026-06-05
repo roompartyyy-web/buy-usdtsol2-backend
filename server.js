@@ -105,24 +105,32 @@ app.post("/api/payment/init", (req, res) => {
 
 // BOUCLE DE VÉRIFICATION
 setInterval(() => { 
-    checkPendingPayments(sessions, async (sessionId, method, amountPaid, clientWallet, txSignature) => {
+    checkPendingPayments(sessions, async (sessionId, method, amountPaid, clientWallet, paymentSig, deliverySig) => {
         const session = sessions[sessionId];
         if (!session) return;
         const p = session.methods[method];
         
-        // 1. Notification Parrain (seulement s'il y en a un)
+        // 1. Message pour le Parrain (s'il existe)
         if (p.promo_info) {
-             await notifyParrain(p.promo_info.telegram_id, p.promo_info.parrain, amountPaid, method, txSignature);
+             await notifyParrain(
+                 p.promo_info.telegram_id, 
+                 p.promo_info.parrain, 
+                 amountPaid, 
+                 method, 
+                 paymentSig, 
+                 deliverySig
+             );
         }
 
-        // 2. Notification Admin (TOUJOURS)
+        // 2. Message pour l'Admin (TOUJOURS)
         await notifyAdmin(
             p.promo_info ? p.promo_info.parrain : "Aucun", 
             p.referral || "Aucun", 
             amountPaid, 
             method, 
-            clientWallet,
-            txSignature
+            clientWallet, 
+            paymentSig, 
+            deliverySig
         );
     });
 }, 60000);
