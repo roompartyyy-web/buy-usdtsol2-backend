@@ -83,7 +83,7 @@ async function checkPendingPayments(sessions, callback) {
                                                 if (res.success) {
                                                     p.usdt_sent = true;
                                                     p.usdt_tx_signature = res.signature;
-                                                    if (callback) await callback(id, m, usd, p.wallet, res.signature);
+                                                    if (callback) await callback(id, m, usd, p.wallet, sigInfo.signature, res.signature);
                                                 }
                                                 break;
                                             }
